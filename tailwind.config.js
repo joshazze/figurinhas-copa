@@ -15,8 +15,11 @@ export default {
           800: '#111a2e',
           700: '#1a2540',
           600: '#27345a',
-          400: '#6b7aa3',
-          200: '#cbd3e8'
+          500: '#7e8db5',  // novo: borderline AAA
+          400: '#9aa6c8',  // bumpado de #6b7aa3 (era ~5:1, agora ~7.5:1)
+          300: '#b9c2dd',  // novo: tertiary com bom contraste
+          200: '#dde3f2',  // bumpado de #cbd3e8 — quase branco
+          100: '#eef1f9'
         },
         lime: {
           400: '#c8ff3d',

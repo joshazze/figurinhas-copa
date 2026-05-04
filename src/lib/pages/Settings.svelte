@@ -46,7 +46,7 @@
 
   <div class="px-5 space-y-3">
     <div class="card p-4">
-      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">moeda</div>
+      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">moeda</div>
       <div class="mt-2 grid grid-cols-3 gap-2">
         {#each ['R$','US$','€'] as c}
           <button
@@ -62,8 +62,8 @@
     </div>
 
     <div class="card p-4">
-      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">backup</div>
-      <p class="text-xs text-ink-400 mt-1">
+      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">backup</div>
+      <p class="text-xs text-ink-300 mt-1">
         Salve um JSON com seu álbum e gastos. Importe em qualquer dispositivo.
       </p>
       <div class="mt-3 grid grid-cols-2 gap-2">
@@ -82,8 +82,8 @@
     </div>
 
     <div class="card p-4">
-      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">zona de risco</div>
-      <p class="text-xs text-ink-400 mt-1">
+      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">zona de risco</div>
+      <p class="text-xs text-ink-300 mt-1">
         Apaga todas as figurinhas e pacotes registrados. Sem volta.
       </p>
       <button

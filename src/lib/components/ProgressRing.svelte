@@ -38,8 +38,8 @@
 
   <div class="absolute inset-0 grid place-items-center text-center">
     <div>
-      <div class="num text-5xl text-white">{clamped.toFixed(1).replace('.', ',')}<span class="text-2xl text-ink-400">%</span></div>
-      {#if label}<div class="mt-1 text-xs uppercase tracking-[0.18em] text-ink-400">{label}</div>{/if}
+      <div class="num text-5xl text-white">{clamped.toFixed(1).replace('.', ',')}<span class="text-2xl text-ink-300">%</span></div>
+      {#if label}<div class="mt-1 text-xs uppercase tracking-[0.18em] text-ink-300">{label}</div>{/if}
       {#if sub}<div class="mt-2 text-sm text-ink-200/80">{sub}</div>{/if}
     </div>
   </div>

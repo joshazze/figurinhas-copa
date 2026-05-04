@@ -38,32 +38,32 @@
   <!-- Stats -->
   <div class="px-5 grid grid-cols-2 gap-3">
     <div class="card p-4">
-      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">abertos</div>
+      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">abertos</div>
       <div class="num text-3xl text-white mt-1">{totalPacks()}</div>
-      <div class="text-xs text-ink-400 mt-1">{totalStickersFromPacks()} figurinhas</div>
+      <div class="text-xs text-ink-300 mt-1">{totalStickersFromPacks()} figurinhas</div>
     </div>
     <div class="card p-4">
-      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">gasto</div>
+      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">gasto</div>
       <div class="num text-3xl text-lime-400 mt-1">{fmt(totalSpent())}</div>
-      <div class="text-xs text-ink-400 mt-1">média {fmt(avgPackCost())}/pacote</div>
+      <div class="text-xs text-ink-300 mt-1">média {fmt(avgPackCost())}/pacote</div>
     </div>
   </div>
 
   <!-- Form -->
   <form class="px-5 mt-4" onsubmit={submit}>
     <div class="card p-4">
-      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">novo pacote</div>
+      <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">novo pacote</div>
       <div class="mt-3 grid grid-cols-2 gap-3">
         <label class="block">
-          <div class="text-xs text-ink-400 mb-1">Custo ({appState.settings.currency})</div>
+          <div class="text-xs text-ink-300 mb-1">Custo ({appState.settings.currency})</div>
           <input bind:value={cost} class="input mono" inputmode="decimal" placeholder="6,00" required />
         </label>
         <label class="block">
-          <div class="text-xs text-ink-400 mb-1">Figurinhas</div>
+          <div class="text-xs text-ink-300 mb-1">Figurinhas</div>
           <input bind:value={count} class="input mono" inputmode="numeric" placeholder={appState.settings.stickersPerPack} />
         </label>
         <label class="block col-span-2">
-          <div class="text-xs text-ink-400 mb-1">Data</div>
+          <div class="text-xs text-ink-300 mb-1">Data</div>
           <input bind:value={date} type="date" class="input mono" />
         </label>
       </div>
@@ -79,7 +79,7 @@
     <div class="card p-4">
       <div class="flex items-center justify-between">
         <div>
-          <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">padrão por pacote</div>
+          <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">padrão por pacote</div>
           <div class="text-sm text-ink-200 mt-1">{appState.settings.stickersPerPack} figurinhas</div>
         </div>
         <div class="flex items-center gap-1">
@@ -99,7 +99,7 @@
   <div class="px-5 mt-4">
     <h2 class="display text-base font-semibold text-white mb-2">Histórico</h2>
     {#if appState.packs.length === 0}
-      <div class="card p-8 text-center text-ink-400">
+      <div class="card p-8 text-center text-ink-300">
         Nenhum pacote registrado ainda.
       </div>
     {:else}
@@ -111,9 +111,9 @@
             </div>
             <div class="flex-1 min-w-0">
               <div class="text-sm font-semibold text-white">{fmt(p.cost)}</div>
-              <div class="text-xs text-ink-400">{fmtDate(p.date)} · {p.count} figurinhas · {fmt(p.cost / Math.max(1,p.count))}/un</div>
+              <div class="text-xs text-ink-300">{fmtDate(p.date)} · {p.count} figurinhas · {fmt(p.cost / Math.max(1,p.count))}/un</div>
             </div>
-            <button class="h-8 w-8 grid place-items-center rounded-lg bg-white/5 border border-white/10 text-ink-400 hover:text-coral-400 hover:border-coral-400/30"
+            <button class="h-8 w-8 grid place-items-center rounded-lg bg-white/5 border border-white/10 text-ink-300 hover:text-coral-400 hover:border-coral-400/30"
                     onclick={() => removePack(p.id)} type="button" aria-label="remover">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2m1 0v14a2 2 0 01-2 2H9a2 2 0 01-2-2V6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>

@@ -32,7 +32,7 @@
 
 @layer components {
   .glass {
-    @apply bg-white/[0.04] border border-white/[0.07] backdrop-blur-xl;
+    @apply bg-white/[0.05] border border-white/[0.1] backdrop-blur-xl;
   }
 
   .card {
@@ -47,8 +47,8 @@
   }
 
   .chip {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium tracking-wide
-           bg-white/5 border border-white/10 text-ink-200;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide
+           bg-white/[0.07] border border-white/15 text-ink-200;
   }
 
   .chip-lime { @apply bg-lime-400/10 border-lime-400/20 text-lime-400; }
@@ -67,8 +67,8 @@
   }
 
   .input {
-    @apply w-full bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3 text-ink-200
-           placeholder:text-ink-400/60 focus:outline-none focus:border-lime-400/40 focus:bg-white/[0.06]
+    @apply w-full bg-white/[0.05] border border-white/15 rounded-2xl px-4 py-3 text-ink-200
+           placeholder:text-ink-400 focus:outline-none focus:border-lime-400/50 focus:bg-white/[0.08]
            transition;
   }
 
@@ -91,16 +91,16 @@
 
   /* Sticker slot */
   .slot {
-    @apply relative aspect-[3/4] rounded-xl border border-dashed border-white/10
-           bg-white/[0.02] flex items-center justify-center text-[10px] text-ink-400/70
+    @apply relative aspect-[3/4] rounded-xl border border-dashed border-white/15
+           bg-white/[0.03] flex items-center justify-center text-[10px] text-ink-300
            transition-all;
   }
   .slot.have {
-    @apply border-solid border-lime-400/30 bg-gradient-to-br from-lime-400/[0.18] to-lime-400/[0.04]
-           text-lime-400 shadow-[inset_0_0_0_1px_rgba(200,255,61,0.12)];
+    @apply border-solid border-lime-400/40 bg-gradient-to-br from-lime-400/25 to-lime-400/[0.06]
+           text-lime-400 shadow-[inset_0_0_0_1px_rgba(200,255,61,0.18)];
   }
   .slot.dup {
-    @apply border-solid border-sun-400/40 bg-gradient-to-br from-sun-400/[0.22] to-sun-400/[0.05]
+    @apply border-solid border-sun-400/50 bg-gradient-to-br from-sun-400/30 to-sun-400/[0.08]
            text-sun-400;
   }
   .slot.special::after {
@@ -110,7 +110,7 @@
   }
 
   .tab-btn {
-    @apply flex flex-col items-center justify-center gap-0.5 flex-1 py-2 text-[10px] font-medium text-ink-400 transition;
+    @apply flex flex-col items-center justify-center gap-0.5 flex-1 py-2 text-[10px] font-semibold text-ink-300 transition;
   }
   .tab-btn.active { @apply text-lime-400; }
   .tab-btn .ico { @apply h-6 w-6; }

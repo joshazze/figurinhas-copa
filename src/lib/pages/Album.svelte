@@ -38,7 +38,7 @@
   <!-- Busca -->
   <div class="px-5">
     <div class="relative">
-      <svg class="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <svg class="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/>
       </svg>
       <input
@@ -71,7 +71,7 @@
       <section>
         <div class="flex items-end justify-between mb-2">
           <h2 class="display text-base font-semibold text-white">{g.section}</h2>
-          <div class="text-[11px] text-ink-400 mono">
+          <div class="text-[11px] text-ink-300 mono">
             {g.items.filter(s => (appState.collected[s.code] || 0) > 0).length} / {g.items.length}
           </div>
         </div>
@@ -84,7 +84,7 @@
     {/each}
 
     {#if sections().length === 0}
-      <div class="card p-8 text-center text-ink-400">
+      <div class="card p-8 text-center text-ink-300">
         Nenhuma figurinha encontrada com esses filtros.
       </div>
     {/if}

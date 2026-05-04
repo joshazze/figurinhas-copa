@@ -40,16 +40,16 @@
 
       <div class="mt-5 grid grid-cols-3 gap-2 w-full">
         <div class="rounded-2xl bg-white/[0.04] border border-white/10 py-3">
-          <div class="num text-xl text-white">{uniqueOwned()}<span class="text-ink-400 text-sm">/{totalStickers}</span></div>
-          <div class="text-[10px] uppercase tracking-widest text-ink-400 mt-0.5">coladas</div>
+          <div class="num text-xl text-white">{uniqueOwned()}<span class="text-ink-300 text-sm">/{totalStickers}</span></div>
+          <div class="text-[10px] uppercase tracking-widest text-ink-300 mt-0.5">coladas</div>
         </div>
-        <div class="rounded-2xl bg-sun-400/[0.06] border border-sun-400/20 py-3">
-          <div class="num text-xl text-sun-400">{uniqueSpecialOwned()}<span class="text-sun-400/60 text-sm">/{totalSpecialStickers()}</span></div>
-          <div class="text-[10px] uppercase tracking-widest text-sun-400/80 mt-0.5">especiais ★</div>
+        <div class="rounded-2xl bg-sun-400/[0.08] border border-sun-400/30 py-3">
+          <div class="num text-xl text-sun-400">{uniqueSpecialOwned()}<span class="text-sun-400/80 text-sm">/{totalSpecialStickers()}</span></div>
+          <div class="text-[10px] uppercase tracking-widest text-sun-400 mt-0.5">especiais ★</div>
         </div>
         <div class="rounded-2xl bg-white/[0.04] border border-white/10 py-3">
           <div class="num text-xl text-coral-400">{totalDuplicates()}</div>
-          <div class="text-[10px] uppercase tracking-widest text-ink-400 mt-0.5">repetidas</div>
+          <div class="text-[10px] uppercase tracking-widest text-ink-300 mt-0.5">repetidas</div>
         </div>
       </div>
     </div>
@@ -93,7 +93,7 @@
       </div>
       <div>
         <div class="font-semibold text-white">Novo pacote</div>
-        <div class="text-xs text-ink-400">Registrar abertura</div>
+        <div class="text-xs text-ink-300">Registrar abertura</div>
       </div>
     </a>
     <a href="#dups" class="card p-4 flex items-center gap-3 hover:bg-white/[0.06] transition">
@@ -104,7 +104,7 @@
       </div>
       <div>
         <div class="font-semibold text-white">Trocar repetidas</div>
-        <div class="text-xs text-ink-400">{totalDuplicates()} disponíveis</div>
+        <div class="text-xs text-ink-300">{totalDuplicates()} disponíveis</div>
       </div>
     </a>
   </div>

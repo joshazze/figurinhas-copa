@@ -50,11 +50,11 @@
   <div class="px-5">
     <div class="card p-4 flex items-center justify-between">
       <div>
-        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">total disponíveis</div>
+        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">total disponíveis</div>
         <div class="num text-3xl text-sun-400 mt-1">{totalDuplicates()}</div>
       </div>
       <div class="text-right">
-        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400">títulos</div>
+        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">títulos</div>
         <div class="num text-3xl text-white mt-1">{duplicates().length}</div>
       </div>
     </div>
@@ -81,7 +81,7 @@
               </div>
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-semibold text-white truncate">{sticker.name}</div>
-                <div class="text-xs text-ink-400">você tem ×{count}</div>
+                <div class="text-xs text-ink-300">você tem ×{count}</div>
               </div>
               <div class="flex items-center gap-1">
                 <button class="h-8 w-8 grid place-items-center rounded-lg bg-white/5 border border-white/10 hover:bg-white/10"
@@ -101,7 +101,7 @@
     {/each}
 
     {#if groupedBySection().length === 0}
-      <div class="card p-10 text-center text-ink-400">
+      <div class="card p-10 text-center text-ink-300">
         <div class="display text-lg text-white">Sem repetidas por aqui.</div>
         <div class="mt-1 text-sm">Quando bater alguma, ela aparece nesta lista.</div>
       </div>
