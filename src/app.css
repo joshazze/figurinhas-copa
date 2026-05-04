@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html, body {
+    @apply bg-ink-950 text-ink-200 antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(200,255,61,0.08), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(255,179,34,0.06), transparent 60%),
+      #070b15;
+    min-height: 100dvh;
+  }
+
+  ::-webkit-scrollbar { width: 0; height: 0; }
+
+  button { -webkit-tap-highlight-color: transparent; }
+
+  .display { font-family: 'Space Grotesk', system-ui, sans-serif; letter-spacing: -0.02em; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/[0.04] border border-white/[0.07] backdrop-blur-xl;
+  }
+
+  .card {
+    @apply glass rounded-3xl shadow-card relative overflow-hidden;
+  }
+
+  .card::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), transparent 30%);
+    pointer-events: none;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium tracking-wide
+           bg-white/5 border border-white/10 text-ink-200;
+  }
+
+  .chip-lime { @apply bg-lime-400/10 border-lime-400/20 text-lime-400; }
+  .chip-sun  { @apply bg-sun-400/10  border-sun-400/20  text-sun-400; }
+  .chip-coral{ @apply bg-coral-400/10 border-coral-400/20 text-coral-400; }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold
+           transition active:scale-[0.98];
+  }
+  .btn-primary {
+    @apply bg-lime-400 text-ink-950 shadow-glow hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply bg-white/5 border border-white/10 text-ink-200 hover:bg-white/10;
+  }
+
+  .input {
+    @apply w-full bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3 text-ink-200
+           placeholder:text-ink-400/60 focus:outline-none focus:border-lime-400/40 focus:bg-white/[0.06]
+           transition;
+  }
+
+  .num {
+    @apply display font-bold tabular-nums tracking-tight;
+  }
+
+  .scrollx {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+  }
+  .scrollx > * { scroll-snap-align: start; }
+
+  .grain::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: theme('backgroundImage.grain');
+    opacity: 0.5; mix-blend-mode: overlay; pointer-events: none;
+  }
+
+  /* Sticker slot */
+  .slot {
+    @apply relative aspect-[3/4] rounded-xl border border-dashed border-white/10
+           bg-white/[0.02] flex items-center justify-center text-[10px] text-ink-400/70
+           transition-all;
+  }
+  .slot.have {
+    @apply border-solid border-lime-400/30 bg-gradient-to-br from-lime-400/[0.18] to-lime-400/[0.04]
+           text-lime-400 shadow-[inset_0_0_0_1px_rgba(200,255,61,0.12)];
+  }
+  .slot.dup {
+    @apply border-solid border-sun-400/40 bg-gradient-to-br from-sun-400/[0.22] to-sun-400/[0.05]
+           text-sun-400;
+  }
+  .slot.special::after {
+    content: "★";
+    position: absolute; top: 4px; right: 6px; font-size: 10px;
+    color: theme('colors.sun.400');
+  }
+
+  .tab-btn {
+    @apply flex flex-col items-center justify-center gap-0.5 flex-1 py-2 text-[10px] font-medium text-ink-400 transition;
+  }
+  .tab-btn.active { @apply text-lime-400; }
+  .tab-btn .ico { @apply h-6 w-6; }
+}
+
+/* Subtle entrance for screens */
+.screen-enter { animation: enter .35s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Progress ring fill animation */
+.ring-fill { transition: stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1); }

@@ -1,0 +1,10 @@
+node_modules
+dist
+.DS_Store
+.vite
+.env
+.env.local
+public/pwa-192.png
+public/pwa-512.png
+public/pwa-512-maskable.png
+public/apple-touch-icon.png
