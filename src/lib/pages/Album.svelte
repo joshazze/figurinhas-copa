@@ -29,7 +29,7 @@
 </script>
 
 <section class="screen-enter pb-32">
-  <Header sub="Álbum" title="{uniqueOwned()} / {totalStickers}">
+  <Header sub="48 seleções · 980 figurinhas" title="{uniqueOwned()} / {totalStickers}">
     {#snippet right()}
       <div class="chip chip-lime">{((uniqueOwned()/totalStickers)*100).toFixed(1).replace('.', ',')}%</div>
     {/snippet}

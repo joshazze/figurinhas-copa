@@ -11,9 +11,10 @@
   <svg width={size} height={size} viewBox="0 0 {size} {size}" class="-rotate-90">
     <defs>
       <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#c8ff3d" />
-        <stop offset="55%" stop-color="#ffd35a" />
-        <stop offset="100%" stop-color="#ff6b6b" />
+        <stop offset="0%"   stop-color="#1d4ed8" />
+        <stop offset="38%"  stop-color="#dc2626" />
+        <stop offset="68%"  stop-color="#fbbf24" />
+        <stop offset="100%" stop-color="#16a34a" />
       </linearGradient>
       <filter id="ring-blur"><feGaussianBlur stdDeviation="6" /></filter>
     </defs>
@@ -39,8 +40,8 @@
   <div class="absolute inset-0 grid place-items-center text-center">
     <div>
       <div class="num text-5xl text-white">{clamped.toFixed(1).replace('.', ',')}<span class="text-2xl text-ink-300">%</span></div>
-      {#if label}<div class="mt-1 text-xs uppercase tracking-[0.18em] text-ink-300">{label}</div>{/if}
-      {#if sub}<div class="mt-2 text-sm text-ink-200/80">{sub}</div>{/if}
+      {#if label}<div class="mt-1 text-[10px] uppercase tracking-[0.22em] text-ink-300">{label}</div>{/if}
+      {#if sub}<div class="mt-2 text-sm text-ink-200/85">{sub}</div>{/if}
     </div>
   </div>
 </div>

@@ -42,7 +42,7 @@
 </script>
 
 <section class="screen-enter pb-32">
-  <Header sub="Backup e preferências" title="Ajustes" />
+  <Header sub="Backup e preferências" title="Ajustes" hosts={false} />
 
   <div class="px-5 space-y-3">
     <div class="card p-4">
@@ -53,7 +53,7 @@
             type="button"
             class="rounded-xl py-2 text-sm font-semibold border transition
               {appState.settings.currency === c
-                ? 'bg-lime-400 text-ink-950 border-lime-400'
+                ? 'bg-gradient-to-r from-flag-500 to-flag-400 text-white border-flag-500'
                 : 'bg-white/5 border-white/10 text-ink-200'}"
             onclick={() => updateSettings({ currency: c })}
           >{c}</button>
@@ -95,8 +95,14 @@
       </button>
     </div>
 
-    <div class="text-center text-[11px] text-ink-400 pt-2">
-      Figurinhas Copa 2026 · feito com 💚 — funciona offline
+    <div class="text-center text-[11px] text-ink-400 pt-4 space-y-1">
+      <div class="flex items-center justify-center gap-1.5">
+        <span class="flag-mini flag-us"></span>
+        <span class="flag-mini flag-ca"></span>
+        <span class="flag-mini flag-mx"></span>
+      </div>
+      <div class="display tracking-[0.3em] text-ink-300">FIFA WORLD CUP 2026</div>
+      <div>Figurinhas Copa 2026 · funciona offline</div>
     </div>
   </div>
 </section>

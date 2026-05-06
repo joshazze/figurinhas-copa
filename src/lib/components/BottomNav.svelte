@@ -12,7 +12,7 @@
 
 <nav class="fixed bottom-0 inset-x-0 z-40 px-3 pb-[max(0.6rem,var(--safe-bottom))] pt-2
             bg-gradient-to-t from-ink-950 via-ink-950/90 to-transparent">
-  <div class="card mx-auto max-w-md flex items-stretch p-1.5">
+  <div class="card mx-auto max-w-md flex items-stretch p-1.5 tricolor-bar">
     {#each tabs as t}
       <button
         type="button"

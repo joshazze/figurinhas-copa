@@ -1,11 +1,16 @@
 <script>
-  let { label = '', value = '', sub = '', accent = 'lime', icon = null } = $props();
+  let { label = '', value = '', sub = '', accent = 'flag', icon = null } = $props();
 
   const accentMap = {
-    lime: 'from-lime-400/15 to-transparent text-lime-400',
-    sun:  'from-sun-400/15  to-transparent text-sun-400',
-    coral:'from-coral-400/15 to-transparent text-coral-400',
-    ink:  'from-white/[0.06] to-transparent text-ink-200'
+    flag:  'from-flag-400/20  to-transparent text-flag-400',
+    sky:   'from-sky26-400/20 to-transparent text-sky26-400',
+    pitch: 'from-pitch-400/20 to-transparent text-pitch-400',
+    gold:  'from-gold-400/25  to-transparent text-gold-400',
+    ink:   'from-white/[0.06] to-transparent text-ink-200',
+    // legados
+    lime:  'from-pitch-400/20 to-transparent text-pitch-400',
+    sun:   'from-gold-400/25  to-transparent text-gold-400',
+    coral: 'from-flag-400/20  to-transparent text-flag-400'
   };
 </script>
 
@@ -21,5 +26,5 @@
   <div class="mt-2 num text-3xl text-white">{value}</div>
   {#if sub}<div class="mt-1 text-xs text-ink-300">{sub}</div>{/if}
 
-  <div class="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r {accentMap[accent]}"></div>
+  <div class="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r {accentMap[accent] || accentMap.flag}"></div>
 </div>

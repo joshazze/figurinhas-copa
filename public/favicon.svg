@@ -1,14 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#c8ff3d"/>
-      <stop offset="60%" stop-color="#ffd35a"/>
-      <stop offset="100%" stop-color="#ff6b6b"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#0a1330"/>
+      <stop offset="100%" stop-color="#050b1f"/>
+    </linearGradient>
+    <linearGradient id="g26" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#fde68a"/>
+      <stop offset="55%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#b45309"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="#0b1220"/>
-  <circle cx="32" cy="32" r="22" fill="none" stroke="url(#g)" stroke-width="6" stroke-linecap="round"
-          stroke-dasharray="120 200" transform="rotate(-90 32 32)"/>
-  <circle cx="32" cy="32" r="11" fill="url(#g)"/>
-  <circle cx="32" cy="32" r="3.5" fill="#0b1220"/>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- Faixa tricolor (USA azul / vermelho / México verde) -->
+  <rect x="0"  y="0" width="22" height="4" fill="#1d4ed8"/>
+  <rect x="22" y="0" width="20" height="4" fill="#dc2626"/>
+  <rect x="42" y="0" width="22" height="4" fill="#16a34a"/>
+  <!-- Número 26 dourado central -->
+  <text x="32" y="46" text-anchor="middle"
+        font-family="'Bebas Neue','Space Grotesk',system-ui,sans-serif"
+        font-size="38" font-weight="900" fill="url(#g26)" letter-spacing="-1">26</text>
+  <!-- Estrela dourada -->
+  <path d="M52 52 l1.6 3.4 3.7.4 -2.8 2.5 .8 3.7 -3.3 -1.9 -3.3 1.9 .8 -3.7 -2.8 -2.5 3.7 -.4 z"
+        fill="#fbbf24" opacity="0.9"/>
 </svg>

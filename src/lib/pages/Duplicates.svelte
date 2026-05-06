@@ -36,7 +36,7 @@
 </script>
 
 <section class="screen-enter pb-32">
-  <Header sub="Pra trocar" title="Repetidas">
+  <Header sub="Pra trocar com a galera" title="Repetidas">
     {#snippet right()}
       <button class="btn btn-ghost !py-2 !px-3 text-xs" onclick={shareList} type="button">
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">

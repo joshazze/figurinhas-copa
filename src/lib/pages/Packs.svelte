@@ -33,7 +33,7 @@
 </script>
 
 <section class="screen-enter pb-32">
-  <Header sub="Histórico" title="Pacotes" />
+  <Header sub="7 figurinhas por pacote" title="Pacotes" />
 
   <!-- Stats -->
   <div class="px-5 grid grid-cols-2 gap-3">
@@ -44,7 +44,7 @@
     </div>
     <div class="card p-4">
       <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">gasto</div>
-      <div class="num text-3xl text-lime-400 mt-1">{fmt(totalSpent())}</div>
+      <div class="num text-3xl text-flag-400 mt-1">{fmt(totalSpent())}</div>
       <div class="text-xs text-ink-300 mt-1">média {fmt(avgPackCost())}/pacote</div>
     </div>
   </div>
@@ -106,7 +106,7 @@
       <div class="card divide-y divide-white/5">
         {#each appState.packs as p (p.id)}
           <div class="flex items-center gap-3 p-3">
-            <div class="h-10 w-10 grid place-items-center rounded-xl bg-lime-400/15 border border-lime-400/30 text-lime-400">
+            <div class="h-10 w-10 grid place-items-center rounded-xl bg-flag-400/15 border border-flag-400/30 text-flag-400">
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4M3 17l9 4 9-4" stroke-linejoin="round"/></svg>
             </div>
             <div class="flex-1 min-w-0">
