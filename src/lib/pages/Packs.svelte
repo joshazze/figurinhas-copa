@@ -13,9 +13,12 @@
   let cost = $state(defaultCostStr());
   let count = $state('');
   let qty = $state('1');
+  let source = $state('mc');
   let date = $state(new Date().toISOString().slice(0, 10));
 
   const fmt = (n) => `${appState.settings.currency} ${(n||0).toFixed(2).replace('.', ',')}`;
+
+  const sourceLabel = (s) => (s === 'banca' ? 'banca' : 'mc');
 
   function submit(e) {
     e.preventDefault();
@@ -23,7 +26,7 @@
     if (!isFinite(c) || c < 0) return;
     const n = parseInt(count) || appState.settings.stickersPerPack;
     const q = Math.max(1, parseInt(qty) || 1);
-    addPack({ cost: c, count: n, qty: q, date: new Date(date).toISOString() });
+    addPack({ cost: c, count: n, qty: q, source, date: new Date(date).toISOString() });
     cost = defaultCostStr();
     count = '';
     qty = '1';
@@ -56,6 +59,18 @@
   <form class="px-5 mt-4" onsubmit={submit}>
     <div class="card p-4">
       <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">novo pacote</div>
+      <div class="mt-3 grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+        <button type="button"
+                onclick={() => source = 'mc'}
+                class="h-9 rounded-lg text-xs uppercase tracking-[0.18em] font-semibold transition {source === 'mc' ? 'bg-flag-400 text-ink-900' : 'text-ink-300 hover:text-white'}">
+          mc
+        </button>
+        <button type="button"
+                onclick={() => source = 'banca'}
+                class="h-9 rounded-lg text-xs uppercase tracking-[0.18em] font-semibold transition {source === 'banca' ? 'bg-flag-400 text-ink-900' : 'text-ink-300 hover:text-white'}">
+          banca
+        </button>
+      </div>
       <div class="mt-3 grid grid-cols-2 gap-3">
         <label class="block">
           <div class="text-xs text-ink-300 mb-1">Custo unit. ({appState.settings.currency})</div>
@@ -132,8 +147,9 @@
                   {fmt(p.cost)}
                 {/if}
               </div>
-              <div class="text-xs text-ink-300">
-                {fmtDate(p.date)} · {p.count * (p.qty || 1)} figurinhas · {fmt(p.cost / Math.max(1,p.count))}/un
+              <div class="text-xs text-ink-300 flex items-center gap-1.5 flex-wrap">
+                <span class="px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-200">{sourceLabel(p.source)}</span>
+                <span>{fmtDate(p.date)} · {p.count * (p.qty || 1)} figurinhas · {fmt(p.cost / Math.max(1,p.count))}/un</span>
               </div>
             </div>
             <button class="h-8 w-8 grid place-items-center rounded-lg bg-white/5 border border-white/10 text-ink-300 hover:text-coral-400 hover:border-coral-400/30"
