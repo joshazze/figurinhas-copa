@@ -67,12 +67,13 @@ export function toggleSticker(code) {
   setStickerCount(code, cur > 0 ? 0 : 1);
 }
 
-export function addPack({ cost, count, date }) {
+export function addPack({ cost, count, date, qty }) {
   const pack = {
     id: crypto.randomUUID(),
     date: date || new Date().toISOString(),
     cost: Number(cost) || 0,
-    count: Math.floor(Number(count) || appState.settings.stickersPerPack)
+    count: Math.floor(Number(count) || appState.settings.stickersPerPack),
+    qty: Math.max(1, Math.floor(Number(qty) || 1))
   };
   appState.packs = [pack, ...appState.packs];
   return pack;

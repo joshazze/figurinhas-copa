@@ -12,6 +12,7 @@
 
   let cost = $state(defaultCostStr());
   let count = $state('');
+  let qty = $state('1');
   let date = $state(new Date().toISOString().slice(0, 10));
 
   const fmt = (n) => `${appState.settings.currency} ${(n||0).toFixed(2).replace('.', ',')}`;
@@ -21,9 +22,11 @@
     const c = parseFloat(String(cost).replace(',', '.'));
     if (!isFinite(c) || c < 0) return;
     const n = parseInt(count) || appState.settings.stickersPerPack;
-    addPack({ cost: c, count: n, date: new Date(date).toISOString() });
+    const q = Math.max(1, parseInt(qty) || 1);
+    addPack({ cost: c, count: n, qty: q, date: new Date(date).toISOString() });
     cost = defaultCostStr();
     count = '';
+    qty = '1';
   }
 
   function fmtDate(iso) {
@@ -55,21 +58,31 @@
       <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">novo pacote</div>
       <div class="mt-3 grid grid-cols-2 gap-3">
         <label class="block">
-          <div class="text-xs text-ink-300 mb-1">Custo ({appState.settings.currency})</div>
+          <div class="text-xs text-ink-300 mb-1">Custo unit. ({appState.settings.currency})</div>
           <input bind:value={cost} class="input mono" inputmode="decimal" placeholder="6,00" required />
         </label>
         <label class="block">
-          <div class="text-xs text-ink-300 mb-1">Figurinhas</div>
+          <div class="text-xs text-ink-300 mb-1">Figurinhas/pacote</div>
           <input bind:value={count} class="input mono" inputmode="numeric" placeholder={appState.settings.stickersPerPack} />
         </label>
-        <label class="block col-span-2">
+        <label class="block">
+          <div class="text-xs text-ink-300 mb-1">Qtd. pacotes</div>
+          <input bind:value={qty} class="input mono" inputmode="numeric" min="1" placeholder="1" />
+        </label>
+        <label class="block">
           <div class="text-xs text-ink-300 mb-1">Data</div>
           <input bind:value={date} type="date" class="input mono" />
         </label>
       </div>
+      {#if (parseInt(qty) || 1) > 1 && parseFloat(String(cost).replace(',', '.')) > 0}
+        <div class="mt-3 text-xs text-ink-300">
+          total: <span class="text-lime-400 num">{fmt((parseFloat(String(cost).replace(',', '.')) || 0) * (parseInt(qty) || 1))}</span>
+          · <span class="text-white num">{(parseInt(count) || appState.settings.stickersPerPack) * (parseInt(qty) || 1)}</span> figurinhas
+        </div>
+      {/if}
       <button type="submit" class="btn btn-primary w-full mt-3">
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
-        registrar pacote
+        {(parseInt(qty) || 1) > 1 ? `registrar ${parseInt(qty) || 1} pacotes` : 'registrar pacote'}
       </button>
     </div>
   </form>
@@ -110,8 +123,18 @@
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4M3 17l9 4 9-4" stroke-linejoin="round"/></svg>
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-sm font-semibold text-white">{fmt(p.cost)}</div>
-              <div class="text-xs text-ink-300">{fmtDate(p.date)} · {p.count} figurinhas · {fmt(p.cost / Math.max(1,p.count))}/un</div>
+              <div class="text-sm font-semibold text-white">
+                {#if (p.qty || 1) > 1}
+                  <span class="text-ink-200">{p.qty}×</span> {fmt(p.cost)}
+                  <span class="text-ink-300">=</span>
+                  <span class="text-lime-400">{fmt(p.cost * (p.qty || 1))}</span>
+                {:else}
+                  {fmt(p.cost)}
+                {/if}
+              </div>
+              <div class="text-xs text-ink-300">
+                {fmtDate(p.date)} · {p.count * (p.qty || 1)} figurinhas · {fmt(p.cost / Math.max(1,p.count))}/un
+              </div>
             </div>
             <button class="h-8 w-8 grid place-items-center rounded-lg bg-white/5 border border-white/10 text-ink-300 hover:text-coral-400 hover:border-coral-400/30"
                     onclick={() => removePack(p.id)} type="button" aria-label="remover">

@@ -35,15 +35,15 @@ export function totalDuplicates() {
 }
 
 export function totalSpent() {
-  return appState.packs.reduce((acc, p) => acc + (p.cost || 0), 0);
+  return appState.packs.reduce((acc, p) => acc + (p.cost || 0) * (p.qty || 1), 0);
 }
 
 export function totalPacks() {
-  return appState.packs.length;
+  return appState.packs.reduce((acc, p) => acc + (p.qty || 1), 0);
 }
 
 export function totalStickersFromPacks() {
-  return appState.packs.reduce((acc, p) => acc + (p.count || 0), 0);
+  return appState.packs.reduce((acc, p) => acc + (p.count || 0) * (p.qty || 1), 0);
 }
 
 export function avgPackCost() {
