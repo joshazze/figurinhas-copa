@@ -1,5 +1,8 @@
 <script>
-  import { appState, addPack, removePack, updateSettings } from '../stores/appState.svelte.js';
+  import {
+    appState, addPack, removePack,
+    STICKERS_BY_SOURCE, defaultStickersForSource
+  } from '../stores/appState.svelte.js';
   import {
     totalPacks, totalSpent, avgPackCost, totalStickersFromPacks, avgStickerCost
   } from '../stores/derived.svelte.js';
@@ -20,11 +23,21 @@
 
   const sourceLabel = (s) => (s === 'banca' ? 'banca' : 'mc');
 
+  // Quantos figurinhas o input vai assumir caso fique vazio.
+  const autoCount = $derived(defaultStickersForSource(source));
+  const effectiveCount = $derived(parseInt(count) || autoCount);
+
+  function pickSource(s) {
+    source = s;
+    // Limpa o count manual: força o auto-count da nova origem.
+    count = '';
+  }
+
   function submit(e) {
     e.preventDefault();
     const c = parseFloat(String(cost).replace(',', '.'));
     if (!isFinite(c) || c < 0) return;
-    const n = parseInt(count) || appState.settings.stickersPerPack;
+    const n = parseInt(count) || defaultStickersForSource(source);
     const q = Math.max(1, parseInt(qty) || 1);
     addPack({ cost: c, count: n, qty: q, source, date: new Date(date).toISOString() });
     cost = defaultCostStr();
@@ -39,7 +52,7 @@
 </script>
 
 <section class="screen-enter pb-32">
-  <Header sub="7 figurinhas por pacote" title="Pacotes" />
+  <Header sub="mc · 5 figurinhas  ·  banca · 7 figurinhas" title="Pacotes" />
 
   <!-- Stats -->
   <div class="px-5 grid grid-cols-2 gap-3">
@@ -61,14 +74,14 @@
       <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">novo pacote</div>
       <div class="mt-3 grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
         <button type="button"
-                onclick={() => source = 'mc'}
+                onclick={() => pickSource('mc')}
                 class="h-9 rounded-lg text-xs uppercase tracking-[0.18em] font-semibold transition {source === 'mc' ? 'bg-flag-400 text-ink-900' : 'text-ink-300 hover:text-white'}">
-          mc
+          mc · 5
         </button>
         <button type="button"
-                onclick={() => source = 'banca'}
+                onclick={() => pickSource('banca')}
                 class="h-9 rounded-lg text-xs uppercase tracking-[0.18em] font-semibold transition {source === 'banca' ? 'bg-flag-400 text-ink-900' : 'text-ink-300 hover:text-white'}">
-          banca
+          banca · 7
         </button>
       </div>
       <div class="mt-3 grid grid-cols-2 gap-3">
@@ -78,7 +91,7 @@
         </label>
         <label class="block">
           <div class="text-xs text-ink-300 mb-1">Figurinhas/pacote</div>
-          <input bind:value={count} class="input mono" inputmode="numeric" placeholder={appState.settings.stickersPerPack} />
+          <input bind:value={count} class="input mono" inputmode="numeric" placeholder={`auto · ${autoCount}`} />
         </label>
         <label class="block">
           <div class="text-xs text-ink-300 mb-1">Qtd. pacotes</div>
@@ -92,7 +105,7 @@
       {#if (parseInt(qty) || 1) > 1 && parseFloat(String(cost).replace(',', '.')) > 0}
         <div class="mt-3 text-xs text-ink-300">
           total: <span class="text-lime-400 num">{fmt((parseFloat(String(cost).replace(',', '.')) || 0) * (parseInt(qty) || 1))}</span>
-          · <span class="text-white num">{(parseInt(count) || appState.settings.stickersPerPack) * (parseInt(qty) || 1)}</span> figurinhas
+          · <span class="text-white num">{effectiveCount * (parseInt(qty) || 1)}</span> figurinhas
         </div>
       {/if}
       <button type="submit" class="btn btn-primary w-full mt-3">
@@ -102,23 +115,18 @@
     </div>
   </form>
 
-  <!-- Settings inline -->
+  <!-- Defaults por origem (somente leitura: oficial Panini Copa 2026) -->
   <div class="px-5 mt-4">
-    <div class="card p-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">padrão por pacote</div>
-          <div class="text-sm text-ink-200 mt-1">{appState.settings.stickersPerPack} figurinhas</div>
-        </div>
-        <div class="flex items-center gap-1">
-          <button class="h-8 w-8 grid place-items-center rounded-lg bg-white/5 border border-white/10"
-                  type="button"
-                  onclick={() => updateSettings({ stickersPerPack: Math.max(1, appState.settings.stickersPerPack - 1) })}>−</button>
-          <div class="num min-w-[2ch] text-center text-white">{appState.settings.stickersPerPack}</div>
-          <button class="h-8 w-8 grid place-items-center rounded-lg bg-white/5 border border-white/10"
-                  type="button"
-                  onclick={() => updateSettings({ stickersPerPack: appState.settings.stickersPerPack + 1 })}>+</button>
-        </div>
+    <div class="card p-4 grid grid-cols-2 gap-3">
+      <div>
+        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">mc</div>
+        <div class="num text-2xl text-white mt-1">{STICKERS_BY_SOURCE.mc}</div>
+        <div class="text-[10px] text-ink-300 mt-0.5">figurinhas/pacote</div>
+      </div>
+      <div>
+        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">banca</div>
+        <div class="num text-2xl text-white mt-1">{STICKERS_BY_SOURCE.banca}</div>
+        <div class="text-[10px] text-ink-300 mt-0.5">figurinhas/pacote</div>
       </div>
     </div>
   </div>

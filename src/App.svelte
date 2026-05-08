@@ -4,13 +4,14 @@
   import Album from './lib/pages/Album.svelte';
   import Duplicates from './lib/pages/Duplicates.svelte';
   import Packs from './lib/pages/Packs.svelte';
+  import Logs from './lib/pages/Logs.svelte';
   import Settings from './lib/pages/Settings.svelte';
 
   let tab = $state(readHash());
 
   function readHash() {
     const h = (location.hash || '').replace('#', '');
-    return ['home','album','dups','packs','settings'].includes(h) ? h : 'home';
+    return ['home','album','dups','packs','logs','settings'].includes(h) ? h : 'home';
   }
 
   function go(t) {
@@ -29,6 +30,7 @@
   {:else if tab === 'album'} <Album />
   {:else if tab === 'dups'}  <Duplicates />
   {:else if tab === 'packs'} <Packs />
+  {:else if tab === 'logs'}  <Logs />
   {:else if tab === 'settings'} <Settings />
   {/if}
 </main>
