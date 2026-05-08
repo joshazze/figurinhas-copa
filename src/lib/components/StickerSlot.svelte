@@ -6,6 +6,7 @@
   const count = $derived(appState.collected[sticker.code] || 0);
   const have = $derived(count > 0);
   const dup = $derived(count > 1);
+  const display = $derived(sticker.label || sticker.code);
 
   let pressTimer = null;
 
@@ -45,10 +46,10 @@
   onpointerup={pressEnd}
   onpointerleave={pressCancel}
   onpointercancel={pressCancel}
-  aria-label={`${sticker.code} — ${sticker.name}${have ? ` (tem ${count})` : ''}`}
+  aria-label={`${display} — ${sticker.name}${have ? ` (tem ${count})` : ''}`}
 >
   <div class="flex flex-col items-center gap-0.5 select-none pointer-events-none">
-    <div class="mono text-[10px] leading-none">{sticker.code}</div>
+    <div class="mono text-[10px] leading-none">{display}</div>
     {#if dup}
       <div class="mt-1 px-1.5 py-0.5 rounded-full bg-sun-400 text-ink-950 text-[9px] font-bold leading-none">
         ×{count}

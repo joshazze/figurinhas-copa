@@ -1,5 +1,8 @@
 <script>
-  import { stickersBySection, totalStickers } from '../data/album.js';
+  import {
+    stickersBySection, totalStickers,
+    mcStickers, totalMcStickers, MC_SECTION
+  } from '../data/album.js';
   import { appState } from '../stores/appState.svelte.js';
   import { uniqueOwned } from '../stores/derived.svelte.js';
   import Header from '../components/Header.svelte';
@@ -8,24 +11,35 @@
   let query = $state('');
   let filter = $state('all'); // all | missing | have
 
+  function applyFilters(items, q) {
+    return items.filter((s) => {
+      if (q) {
+        const hay = `${s.code} ${s.label || ''} ${s.name} ${s.section}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      const c = appState.collected[s.code] || 0;
+      if (filter === 'missing' && c > 0) return false;
+      if (filter === 'have' && c === 0) return false;
+      return true;
+    });
+  }
+
   const sections = $derived(() => {
     const q = query.trim().toLowerCase();
     return stickersBySection
-      .map((g) => {
-        const items = g.items.filter((s) => {
-          if (q) {
-            const hay = `${s.code} ${s.name} ${g.section}`.toLowerCase();
-            if (!hay.includes(q)) return false;
-          }
-          const c = appState.collected[s.code] || 0;
-          if (filter === 'missing' && c > 0) return false;
-          if (filter === 'have' && c === 0) return false;
-          return true;
-        });
-        return { ...g, items };
-      })
+      .map((g) => ({ ...g, items: applyFilters(g.items, q) }))
       .filter((g) => g.items.length > 0);
   });
+
+  const mcSection = $derived(() => {
+    const q = query.trim().toLowerCase();
+    const items = applyFilters(mcStickers, q);
+    return { section: MC_SECTION, items };
+  });
+
+  const mcOwned = $derived(
+    mcStickers.filter((s) => (appState.collected[s.code] || 0) > 0).length
+  );
 </script>
 
 <section class="screen-enter pb-32">
@@ -83,10 +97,33 @@
       </section>
     {/each}
 
-    {#if sections().length === 0}
+    {#if sections().length === 0 && mcSection().items.length === 0}
       <div class="card p-8 text-center text-ink-300">
         Nenhuma figurinha encontrada com esses filtros.
       </div>
+    {/if}
+
+    <!-- Seção paralela: Seleções MC (fora dos 980 oficiais) -->
+    {#if mcSection().items.length > 0}
+      <section>
+        <div class="flex items-end justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <h2 class="display text-base font-semibold text-white">Seleções MC</h2>
+            <span class="chip chip-sun">promo</span>
+          </div>
+          <div class="text-[11px] text-ink-300 mono">
+            {mcOwned} / {totalMcStickers}
+          </div>
+        </div>
+        <div class="text-[11px] text-ink-300 mb-2">
+          Coleção paralela McDonald's — fora do álbum oficial.
+        </div>
+        <div class="grid grid-cols-5 gap-2">
+          {#each mcSection().items as s (s.code)}
+            <StickerSlot sticker={s} />
+          {/each}
+        </div>
+      </section>
     {/if}
   </div>
 </section>

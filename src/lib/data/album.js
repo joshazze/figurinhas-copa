@@ -84,3 +84,21 @@ export const sectionsOrder = [
 export const stickersBySection = sectionsOrder
   .map((sec) => ({ section: sec, items: stickers.filter((s) => s.section === sec) }))
   .filter((g) => g.items.length > 0);
+
+// === Coleção paralela: Seleções MC ===
+// Conjunto promocional fora do álbum oficial Panini (não conta nos 980).
+// 1 figurinha por seleção, etiquetada como "TIME 13" (ex.: "BRA 13").
+// Codigo interno usa prefixo 'MC-' pra nao colidir com BRA13 (jogador).
+export const MC_SECTION = 'Seleções MC';
+export const mcStickers = teams.map((team) => ({
+  code: `MC-${team.code}`,
+  label: `${team.code} 13`,
+  name: `${team.name} — MC`,
+  section: MC_SECTION,
+  team: team.code,
+  type: 'mc-team',
+  special: true,
+  mc: true
+}));
+export const totalMcStickers = mcStickers.length;
+export const mcStickerByCode = Object.fromEntries(mcStickers.map((s) => [s.code, s]));

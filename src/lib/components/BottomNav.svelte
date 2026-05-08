@@ -6,6 +6,7 @@
     { id: 'album',   label: 'Álbum',     icon: 'M4 4h16v16H4zM4 9h16M9 4v16' },
     { id: 'dups',    label: 'Repetidas', icon: 'M8 8h11v11H8zM5 5h11v11H5z' },
     { id: 'packs',   label: 'Pacotes',   icon: 'M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4M3 17l9 4 9-4' },
+    { id: 'logs',    label: 'Logs',      icon: 'M4 6h16M4 12h16M4 18h10' },
     { id: 'settings',label: 'Ajustes',   icon: 'M12 8a4 4 0 100 8 4 4 0 000-8zM2 12h2m16 0h2M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4' }
   ];
 </script>
