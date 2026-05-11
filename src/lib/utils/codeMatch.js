@@ -96,11 +96,62 @@ export function extractCandidates(text) {
   return entries.map(([code, votes]) => ({ code, votes }));
 }
 
-// Versao que considera passes (multi-pass voting): codigo que aparece em
-// PASSES DIFERENTES vale mais que codigo aparecendo varias vezes no mesmo pass.
-// Recebe lines [{ text, pass }], retorna [{ code, votes, passes }].
+// Conta quantas vezes cada codigo aparece em um texto.
+// Diferente de extractCandidates que dedupe — aqui conta ocorrencias.
+function countOccurrences(text) {
+  if (!text) return new Map();
+  const found = new Map();
+  const clean = String(text).replace(/[^\x20-\x7E\n\r\t]/g, ' ');
+
+  const codeRegex = /\b([A-Za-z]{2,5})[\s\-]?([0-9OILSGBZoilsgbz]{1,2})\b/g;
+  let m;
+  while ((m = codeRegex.exec(clean)) !== null) {
+    const prefixRaw = m[1];
+    const digitsRaw = m[2];
+    const letters = prefixRaw.match(/[A-Za-z]/g) || [];
+    const upperCount = letters.filter((c) => c >= 'A' && c <= 'Z').length;
+    if (letters.length === 0 || upperCount / letters.length < 0.8) continue;
+    if (!/[0-9]/.test(digitsRaw)) continue;
+    const prefix = prefixRaw.toUpperCase();
+    const digits = fixDigits(digitsRaw.toUpperCase());
+    if (!/^\d{1,2}$/.test(digits)) continue;
+    const n = parseInt(digits, 10);
+    if (isNaN(n) || n < 1) continue;
+
+    let code = null;
+    if (prefix === 'FWC' && n <= MAX_FWC) code = `FWC${n}`;
+    else if (TEAM_CODES.has(prefix) && n <= TEAM_MAX_NUM) code = `${prefix}${n}`;
+    if (code) found.set(code, (found.get(code) || 0) + 1);
+  }
+
+  const mcRegex = /\b(MC)[\s\-]?([A-Za-z]{2,5})\b/g;
+  while ((m = mcRegex.exec(clean)) !== null) {
+    const teamRaw = m[2];
+    const letters = teamRaw.match(/[A-Za-z]/g) || [];
+    const upperCount = letters.filter((c) => c >= 'A' && c <= 'Z').length;
+    if (letters.length === 0 || upperCount / letters.length < 0.8) continue;
+    const team = teamRaw.toUpperCase();
+    if (TEAM_CODES.has(team)) {
+      const code = `MC-${team}`;
+      found.set(code, (found.get(code) || 0) + 1);
+    }
+  }
+
+  const capaCount = (clean.match(/\bCAPA\b/g) || []).length;
+  if (capaCount > 0) found.set('CAPA', capaCount);
+
+  return found;
+}
+
+// Multi-pass voting com contagem de copias fisicas.
+// Recebe lines [{ text, pass }], retorna [{ code, votes, passes, copies }]:
+//   - votes: numero de PASSES distintos que detectaram o codigo
+//   - copies: numero estimado de copias fisicas (max occurrences em um pass)
+//
+// Heuristica copies: se "BRA17" aparece 2x num pass, provavelmente sao 2
+// stickers fisicos na foto. Usamos o MAX entre passes (nao a soma) porque
+// cada pass ve a foto inteira do seu angulo.
 export function matchAllWithPasses(lines) {
-  // Agrupa text por pass primeiro
   const byPass = new Map();
   for (const l of lines || []) {
     const key = l.pass || 'default';
@@ -108,23 +159,57 @@ export function matchAllWithPasses(lines) {
     byPass.get(key).push(l.text || '');
   }
 
-  // Pra cada pass, extrai candidatos (uma vez por pass — codigo aparece N vezes
-  // no mesmo pass conta como 1 voto desse pass)
-  const codeToPasses = new Map();
+  const codeToPasses = new Map();   // code -> Set<pass>
+  const codeMaxCount = new Map();   // code -> max occurrences in any pass
+
   for (const [pass, texts] of byPass) {
-    const cands = extractCandidates(texts.join(' '));
-    for (const { code } of cands) {
+    const combined = texts.join(' ');
+    const occ = countOccurrences(combined);
+    for (const [code, count] of occ) {
       if (!codeToPasses.has(code)) codeToPasses.set(code, new Set());
       codeToPasses.get(code).add(pass);
+      codeMaxCount.set(code, Math.max(codeMaxCount.get(code) || 0, count));
     }
   }
 
-  const out = [];
-  for (const [code, passes] of codeToPasses) {
-    out.push({ code, votes: passes.size, passes: [...passes] });
+  // Saneamento global: se mais de 30 codigos saem, exige 2+ passes
+  let codes = [...codeToPasses.keys()];
+  if (codes.length > 30) {
+    codes = codes.filter((c) => codeToPasses.get(c).size >= 2);
   }
-  out.sort((a, b) => b.votes - a.votes || a.code.localeCompare(b.code));
+
+  const out = codes.map((code) => ({
+    code,
+    votes: codeToPasses.get(code).size,
+    passes: [...codeToPasses.get(code)],
+    copies: codeMaxCount.get(code) || 1
+  }));
   return out;
+}
+
+// Chave de ordenacao das figurinhas:
+//   CAPA primeiro, depois FWC (intro), depois times alfabeticos, MC por ultimo.
+//   Dentro de cada grupo, ordena por numero crescente.
+export function stickerSortKey(sticker) {
+  if (!sticker) return ['z9', 99];
+  if (sticker.code === 'CAPA') return ['0', 0];
+  if (sticker.mc) return ['z_MC', sticker.team || 'ZZZ'];
+  if (sticker.code.startsWith('FWC')) {
+    return ['1_FWC', parseInt(sticker.code.slice(3), 10) || 0];
+  }
+  if (sticker.team) {
+    const num = parseInt(sticker.code.replace(sticker.team, ''), 10);
+    return ['2_' + sticker.team, isNaN(num) ? 0 : num];
+  }
+  return ['z9', 99];
+}
+
+export function compareStickers(a, b) {
+  const ka = stickerSortKey(a);
+  const kb = stickerSortKey(b);
+  if (ka[0] !== kb[0]) return String(ka[0]).localeCompare(String(kb[0]));
+  if (typeof ka[1] === 'number' && typeof kb[1] === 'number') return ka[1] - kb[1];
+  return String(ka[1]).localeCompare(String(kb[1]));
 }
 
 // Casa o texto contra o album. Cada resultado vem com sticker ja resolvido.

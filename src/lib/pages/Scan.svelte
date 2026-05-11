@@ -1,7 +1,7 @@
 <script>
   import Header from '../components/Header.svelte';
   import { ocrAuto, ocrTesseract, ocrPaddle, prewarmPaddleOCR, isNative } from '../utils/ocr.js';
-  import { matchAll, matchAllWithPasses } from '../utils/codeMatch.js';
+  import { matchAll, matchAllWithPasses, compareStickers } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
   import {
     addSticker, addPack, fulfillExpect, fulfillGive,
@@ -11,7 +11,7 @@
 
   // Versao bumpada a cada deploy do Scan/OCR pra confirmar que o cache do PWA
   // pegou o build novo. Visivel no header da aba.
-  const SCAN_VERSION = isNative() ? '3.1.0-native' : '2.1.6';
+  const SCAN_VERSION = isNative() ? '4.0.0-figs' : '2.1.6';
 
   // Pre-warm engine PaddleOCR quando user abre a aba — so faz sentido no PWA.
   // No app nativo, Vision Framework ja vem carregado no iOS.
@@ -95,22 +95,35 @@
       ocrEngine = result.engine;
       ocrDebug = result.debug;
       if (result.dataUrl) imageUrl = result.dataUrl;
-      // Se temos lines com pass info (PaddleOCR multi-pass), usa voting
-      // baseado em passes diferentes — codigo em 2+ passes = alta confianca.
-      const matches = result.lines
+      // Lines com pass info -> voting baseado em passes diferentes.
+      const rawMatches = result.lines
         ? matchAllWithPasses(result.lines).map((m) => ({
             sticker: stickerByCode[m.code] || mcStickerByCode[m.code],
             code: m.code,
             votes: m.votes,
-            passes: m.passes
+            passes: m.passes,
+            copies: m.copies || 1
           })).filter((m) => m.sticker)
-        : matchAll(result.text);
-      detected = matches.map((m, i) => ({
+        : matchAll(result.text).map((m) => ({ ...m, copies: 1 }));
+
+      // EXPANDE multiplas copias: cada copia vira uma entry separada
+      // (figurinha aparecendo 2x na foto = 2 entries) e ORDENA por
+      // codigo (CAPA, FWC, times alfabeticos, MC) + numero crescente.
+      const expanded = [];
+      for (const m of rawMatches) {
+        const copies = Math.max(1, m.copies || 1);
+        for (let k = 0; k < copies; k++) {
+          expanded.push({ ...m, copyIndex: k });
+        }
+      }
+      expanded.sort((a, b) => compareStickers(a.sticker, b.sticker));
+
+      detected = expanded.map((m, i) => ({
         id: `m${i}`,
         sticker: m.sticker,
         votes: m.votes || 1,
         passes: m.passes || [],
-        // 6 passes Paddle. 2+ = auto-confirma (alta), 1 = revisa.
+        // 2+ passes = auto-confirma, 1 = revisa
         confirmed: (m.votes || 1) >= 2,
         variant: 'album'
       }));
@@ -141,21 +154,24 @@
   }
 
   function addManualCodes() {
-    const fresh = matchAll(manualInput);
-    if (fresh.length === 0) return;
-    const known = new Set(detected.map((d) => d.sticker.code));
-    let i = detected.length;
-    for (const m of fresh) {
-      if (known.has(m.sticker.code)) continue;
-      known.add(m.sticker.code);
-      detected = [...detected, {
-        id: `m${i++}`,
-        sticker: m.sticker,
-        votes: 1,
-        confirmed: true,
-        variant: 'album'
-      }];
+    // Normaliza pra uppercase porque o matcher exige caixa-alta. Mobile
+    // keyboards costumam comecar minusculo e isso fazia o input falhar.
+    const text = (manualInput || '').toUpperCase();
+    const fresh = matchAll(text);
+    if (fresh.length === 0) {
+      manualInput = '';
+      return;
     }
+    let i = detected.length;
+    const additions = fresh.map((m) => ({
+      id: `m${i++}`,
+      sticker: m.sticker,
+      votes: 1,
+      confirmed: true,
+      variant: 'album'
+    }));
+    // re-ordena a lista inteira pelo padrao (CAPA -> FWC -> times -> MC)
+    detected = [...detected, ...additions].sort((a, b) => compareStickers(a.sticker, b.sticker));
     manualInput = '';
   }
 
