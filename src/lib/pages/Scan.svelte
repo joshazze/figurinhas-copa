@@ -18,8 +18,8 @@
   let imageUrl = $state(null);
   let ocrText = $state('');
   let ocrEngine = $state('');
-  let progress = $state(0);
-  let progressStage = $state('prepare');    // prepare | load | ocr
+  let phase = $state('prepare');            // prepare | engine | models | ready | ocr
+  let phasePercent = $state(null);          // null = indeterminado; numero = %
   let errorMsg = $state('');
 
   // detected: [{ id, sticker (album resolvido), votes, confirmed, variant }]
@@ -39,8 +39,8 @@
     imageUrl = null;
     ocrText = '';
     ocrEngine = '';
-    progress = 0;
-    progressStage = 'prepare';
+    phase = 'prepare';
+    phasePercent = null;
     errorMsg = '';
     detected = [];
     manualInput = '';
@@ -64,13 +64,13 @@
     if (imageUrl && imageUrl.startsWith('blob:')) URL.revokeObjectURL(imageUrl);
     imageUrl = URL.createObjectURL(file);
     stage = 'processing';
-    progress = 0;
-    progressStage = 'prepare';
+    phase = 'prepare';
+    phasePercent = null;
     errorMsg = '';
     try {
-      const result = await ocrImage(file, (s, p) => {
-        progressStage = s;
-        progress = p;
+      const result = await ocrImage(file, ({ phase: ph, percent }) => {
+        phase = ph;
+        phasePercent = percent ?? null;
       });
       ocrText = result.text;
       ocrEngine = result.engine;
@@ -171,11 +171,19 @@
   const peopleSuggestions = $derived(() => knownPeople());
   const has13Stickers = $derived(() => detected.some((d) => hasMCVariant(d.sticker)));
 
-  const progressLabel = $derived(() => {
-    if (progressStage === 'prepare') return 'Preparando imagem…';
-    if (progressStage === 'load') return 'Carregando engine OCR (1ª vez)…';
-    if (progressStage === 'ocr') return 'Lendo a foto…';
+  const phaseLabel = $derived(() => {
+    if (phase === 'prepare') return 'Preparando imagem…';
+    if (phase === 'engine')  return 'Baixando engine OCR (1ª vez, ~10MB)…';
+    if (phase === 'models')  return 'Baixando modelos (1ª vez, ~15MB)…';
+    if (phase === 'ready')   return 'Engine pronto, iniciando…';
+    if (phase === 'ocr')     return 'Lendo a foto (rotações 0° + 90°)…';
     return 'Processando…';
+  });
+  const phaseSub = $derived(() => {
+    if (phase === 'engine' || phase === 'models') {
+      return 'depois disso fica cacheado e instantâneo';
+    }
+    return null;
   });
 
   const matchingExpect = $derived(() => {
@@ -248,14 +256,23 @@
         {#if imageUrl}
           <img src={imageUrl} alt="foto" class="rounded-2xl max-h-64 mx-auto" />
         {/if}
-        <h2 class="display text-xl font-bold text-white mt-4">{progressLabel()}</h2>
-        <p class="text-xs text-ink-300 mt-1">
-          1ª foto pode demorar (download dos modelos ~15MB) · depois fica rápido
-        </p>
-        <div class="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
-          <div class="h-full bg-gold-400 transition-all" style="width: {progress}%"></div>
-        </div>
-        <div class="text-[10px] text-ink-400 mt-1">{progressStage} · {progress}%</div>
+        <h2 class="display text-xl font-bold text-white mt-4">{phaseLabel()}</h2>
+        {#if phaseSub()}
+          <p class="text-xs text-ink-300 mt-1">{phaseSub()}</p>
+        {/if}
+        {#if phasePercent != null}
+          <!-- Progresso real (durante OCR) -->
+          <div class="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div class="h-full bg-gold-400 transition-all" style="width: {phasePercent}%"></div>
+          </div>
+          <div class="text-[10px] text-ink-400 mt-1">{phasePercent}%</div>
+        {:else}
+          <!-- Indeterminado (durante load) -->
+          <div class="mt-4 h-1.5 rounded-full bg-white/10 overflow-hidden relative">
+            <div class="absolute inset-y-0 w-1/3 bg-gold-400 rounded-full animate-pulse-slide"></div>
+          </div>
+          <div class="text-[10px] text-ink-400 mt-2 mono">{phase}</div>
+        {/if}
       </div>
     </div>
 
