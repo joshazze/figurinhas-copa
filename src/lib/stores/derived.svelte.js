@@ -1,5 +1,10 @@
 import { appState } from './appState.svelte.js';
-import { stickers, totalStickers, totalSpecial } from '../data/album.js';
+import { stickers, totalStickers, totalSpecial, stickerByCode, mcStickerByCode } from '../data/album.js';
+
+// Lookup global cobrindo album oficial + colecao MC.
+export function lookupSticker(code) {
+  return stickerByCode[code] || mcStickerByCode[code] || null;
+}
 
 // Helpers derivados (puros, recalculam quando state muda)
 
@@ -78,6 +83,46 @@ export function uniqueSpecialOwned() {
 
 export function totalSpecialStickers() {
   return totalSpecial;
+}
+
+// === Compromissos ===
+
+export function commitmentsByType(type) {
+  return appState.commitments.filter((c) => c.type === type);
+}
+
+export function commitmentsByCode(code) {
+  return appState.commitments.filter((c) => c.code === code);
+}
+
+export function totalCommittedToGive() {
+  return commitmentsByType('give').length;
+}
+
+export function totalCommittedToReceive() {
+  return commitmentsByType('expect').length;
+}
+
+// Quantas repetidas estao "comprometidas pra entregar" no codigo X.
+export function pendingGiveForCode(code) {
+  return appState.commitments.filter((c) => c.code === code && c.type === 'give').length;
+}
+
+// === "Faltam pra fechar" — times mais proximos do completo ===
+// Util pra estrategia: foca esforco nos times quase fechados.
+export function teamProgressSummary() {
+  const byTeam = new Map();
+  for (const s of stickers) {
+    if (!s.team) continue;
+    if (!byTeam.has(s.team)) byTeam.set(s.team, { team: s.team, section: s.section, total: 0, owned: 0 });
+    const t = byTeam.get(s.team);
+    t.total++;
+    if ((appState.collected[s.code] || 0) > 0) t.owned++;
+  }
+  return [...byTeam.values()]
+    .map((t) => ({ ...t, missing: t.total - t.owned, pct: t.total ? (t.owned / t.total) * 100 : 0 }))
+    .filter((t) => t.missing > 0)            // ja completos saem da lista
+    .sort((a, b) => a.missing - b.missing || b.pct - a.pct);
 }
 
 // Estimativa de pacotes necessarios pra completar (heuristica simples

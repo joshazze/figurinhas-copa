@@ -16,6 +16,7 @@
     @apply bg-ink-950 text-ink-200 antialiased;
     font-family: 'Inter', system-ui, sans-serif;
     overscroll-behavior-y: none;
+    overflow-x: hidden;
   }
 
   body {

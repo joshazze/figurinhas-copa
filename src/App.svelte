@@ -3,6 +3,7 @@
   import Home from './lib/pages/Home.svelte';
   import Album from './lib/pages/Album.svelte';
   import Duplicates from './lib/pages/Duplicates.svelte';
+  import Scan from './lib/pages/Scan.svelte';
   import Packs from './lib/pages/Packs.svelte';
   import Logs from './lib/pages/Logs.svelte';
   import Settings from './lib/pages/Settings.svelte';
@@ -11,7 +12,7 @@
 
   function readHash() {
     const h = (location.hash || '').replace('#', '');
-    return ['home','album','dups','packs','logs','settings'].includes(h) ? h : 'home';
+    return ['home','album','dups','scan','packs','logs','settings'].includes(h) ? h : 'home';
   }
 
   function go(t) {
@@ -29,6 +30,7 @@
   {#if tab === 'home'}     <Home />
   {:else if tab === 'album'} <Album />
   {:else if tab === 'dups'}  <Duplicates />
+  {:else if tab === 'scan'}  <Scan />
   {:else if tab === 'packs'} <Packs />
   {:else if tab === 'logs'}  <Logs />
   {:else if tab === 'settings'} <Settings />

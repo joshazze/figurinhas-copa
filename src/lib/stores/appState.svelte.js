@@ -16,6 +16,7 @@ const defaultState = {
   collected: {},          // { [code]: count }
   packs: [],              // [{ id, date, cost, count, qty, source }]
   logs: [],               // [{ id, ts, type, ... }] — atividade recente
+  commitments: [],        // [{ id, type, code, person, date }] — promessas/esperas
   settings: {
     stickersPerPack: 7,         // fallback global (origem desconhecida)
     defaultPackPrice: 7.00,     // R$ 7,00 por pacote (oficial)
@@ -33,6 +34,7 @@ function load() {
       ...structuredClone(defaultState),
       ...parsed,
       logs: Array.isArray(parsed.logs) ? parsed.logs : [],
+      commitments: Array.isArray(parsed.commitments) ? parsed.commitments : [],
       settings: { ...defaultState.settings, ...(parsed.settings || {}) },
       meta: { ...defaultState.meta, ...(parsed.meta || {}) }
     };
@@ -135,6 +137,61 @@ export function resetAll() {
   appState.collected = {};
   appState.packs = [];
   appState.logs = [];
+  appState.commitments = [];
+}
+
+// === Compromissos (prometidas/esperadas) ===
+// type:
+//   'give'   — vou entregar pra alguem (uma das minhas repetidas)
+//   'expect' — alguem prometeu me dar (entra como "esperada")
+export const COMMITMENT_TYPES = ['give', 'expect'];
+
+export function addCommitment({ type, code, person }) {
+  const validType = COMMITMENT_TYPES.includes(type) ? type : 'give';
+  const entry = {
+    id: crypto.randomUUID(),
+    date: new Date().toISOString(),
+    type: validType,
+    code,
+    person: (person || '').trim() || '—'
+  };
+  appState.commitments = [entry, ...appState.commitments];
+  pushLog({ type: 'commitment_added', commitment: entry });
+  return entry;
+}
+
+export function removeCommitment(id) {
+  const entry = appState.commitments.find((c) => c.id === id);
+  appState.commitments = appState.commitments.filter((c) => c.id !== id);
+  if (entry) pushLog({ type: 'commitment_removed', commitment: entry });
+}
+
+// Marcar entregue: remove o compromisso 'give' e decrementa repetida (1 unidade saiu).
+export function fulfillGive(id) {
+  const entry = appState.commitments.find((c) => c.id === id && c.type === 'give');
+  if (!entry) return;
+  appState.commitments = appState.commitments.filter((c) => c.id !== id);
+  addSticker(entry.code, -1);
+  pushLog({ type: 'commitment_fulfilled', commitment: entry });
+}
+
+// Marcar recebida: remove a 'expect' e incrementa a colecao (figurinha colada).
+export function fulfillExpect(id) {
+  const entry = appState.commitments.find((c) => c.id === id && c.type === 'expect');
+  if (!entry) return;
+  appState.commitments = appState.commitments.filter((c) => c.id !== id);
+  addSticker(entry.code, 1);
+  pushLog({ type: 'commitment_fulfilled', commitment: entry });
+}
+
+// Pessoas vistas em compromissos passados (auto-completar).
+export function knownPeople() {
+  const set = new Set();
+  for (const c of appState.commitments) if (c.person && c.person !== '—') set.add(c.person);
+  for (const l of appState.logs) {
+    if (l.commitment?.person && l.commitment.person !== '—') set.add(l.commitment.person);
+  }
+  return [...set].sort();
 }
 
 export function exportJSON() {
@@ -146,6 +203,7 @@ export function importJSON(text) {
   appState.collected = parsed.collected || {};
   appState.packs = parsed.packs || [];
   appState.logs = Array.isArray(parsed.logs) ? parsed.logs : [];
+  appState.commitments = Array.isArray(parsed.commitments) ? parsed.commitments : [];
   appState.settings = { ...defaultState.settings, ...(parsed.settings || {}) };
   appState.meta = { ...defaultState.meta, ...(parsed.meta || {}) };
 }
