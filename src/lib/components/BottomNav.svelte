@@ -4,7 +4,7 @@
   const tabs = [
     { id: 'home',    label: 'Início',    icon: 'M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z' },
     { id: 'album',   label: 'Álbum',     icon: 'M4 4h16v16H4zM4 9h16M9 4v16' },
-    { id: 'dups',    label: 'Trocas',    icon: 'M8 8h11v11H8zM5 5h11v11H5z' },
+    { id: 'dups',    label: 'Repetidas', icon: 'M8 8h11v11H8zM5 5h11v11H5z' },
     { id: 'scan',    label: 'Scan',      icon: 'M3 7h3l2-2h8l2 2h3v12H3zM12 13a3.5 3.5 0 100 0.01' },
     { id: 'packs',   label: 'Pacotes',   icon: 'M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4M3 17l9 4 9-4' },
     { id: 'logs',    label: 'Logs',      icon: 'M4 6h16M4 12h16M4 18h10' },
