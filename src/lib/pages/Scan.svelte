@@ -9,6 +9,10 @@
   } from '../stores/appState.svelte.js';
   import { mcStickerByCode, stickerByCode } from '../data/album.js';
 
+  // Versao bumpada a cada deploy do Scan/OCR pra confirmar que o cache do PWA
+  // pegou o build novo. Visivel no header da aba.
+  const SCAN_VERSION = '2.1.3';
+
   // Pre-warm engine quando user abre a aba
   $effect(() => {
     prewarmPaddleOCR();
@@ -220,7 +224,13 @@
 </script>
 
 <section class="screen-enter pb-32">
-  <Header sub="Foto → ação na coleção" title="Scan" />
+  <Header sub="Foto → ação na coleção" title="Scan">
+    {#snippet right()}
+      <span class="mono text-[10px] text-ink-400 px-2 py-1 rounded-md border border-white/10 bg-white/[0.03]">
+        v{SCAN_VERSION}
+      </span>
+    {/snippet}
+  </Header>
 
   <!-- IDLE -->
   {#if stage === 'idle'}
