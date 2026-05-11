@@ -13,18 +13,18 @@
 
 <nav class="fixed bottom-0 inset-x-0 z-40 px-3 pb-[max(0.6rem,var(--safe-bottom))] pt-2
             bg-gradient-to-t from-ink-950 via-ink-950/90 to-transparent">
-  <div class="card mx-auto max-w-md flex items-stretch p-1.5 tricolor-bar">
+  <div class="card mx-auto max-w-md w-full flex items-stretch p-1.5 tricolor-bar min-w-0">
     {#each tabs as t}
       <button
         type="button"
-        class="tab-btn {current === t.id ? 'active' : ''}"
+        class="tab-btn min-w-0 {current === t.id ? 'active' : ''}"
         onclick={() => onChange(t.id)}
       >
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
              stroke-linecap="round" stroke-linejoin="round">
           <path d={t.icon} />
         </svg>
-        <span>{t.label}</span>
+        <span class="truncate max-w-full">{t.label}</span>
       </button>
     {/each}
   </div>
