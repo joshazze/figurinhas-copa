@@ -1,6 +1,6 @@
 <script>
   import Header from '../components/Header.svelte';
-  import { ocrImage, prewarmPaddleOCR } from '../utils/ocr.js';
+  import { ocrPaddle, ocrTesseract, prewarmPaddleOCR } from '../utils/ocr.js';
   import { matchAll } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
   import {
@@ -16,8 +16,10 @@
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
+  let lastFile = $state(null);              // guarda o file pra reprocessar com Tesseract
   let ocrText = $state('');
   let ocrEngine = $state('');
+  let ocrDebug = $state(null);
   let phase = $state('prepare');            // prepare | engine | models | ready | ocr
   let phasePercent = $state(null);          // null = indeterminado; numero = %
   let errorMsg = $state('');
@@ -37,8 +39,10 @@
   function reset() {
     stage = 'idle';
     imageUrl = null;
+    lastFile = null;
     ocrText = '';
     ocrEngine = '';
+    ocrDebug = null;
     phase = 'prepare';
     phasePercent = null;
     errorMsg = '';
@@ -63,17 +67,26 @@
     if (!file) return;
     if (imageUrl && imageUrl.startsWith('blob:')) URL.revokeObjectURL(imageUrl);
     imageUrl = URL.createObjectURL(file);
+    lastFile = file;
+    await runOCR(file, 'paddle');
+    e.target.value = '';
+  }
+
+  async function runOCR(file, engine) {
     stage = 'processing';
     phase = 'prepare';
     phasePercent = null;
     errorMsg = '';
+    ocrDebug = null;
     try {
-      const result = await ocrImage(file, ({ phase: ph, percent }) => {
+      const fn = engine === 'tesseract' ? ocrTesseract : ocrPaddle;
+      const result = await fn(file, ({ phase: ph, percent }) => {
         phase = ph;
         phasePercent = percent ?? null;
       });
       ocrText = result.text;
       ocrEngine = result.engine;
+      ocrDebug = result.debug;
       if (result.dataUrl) imageUrl = result.dataUrl;
       const matches = matchAll(result.text);
       detected = matches.map((m, i) => ({
@@ -87,10 +100,14 @@
     } catch (err) {
       console.error('Scan error:', err);
       errorMsg = err?.message || 'falha no OCR';
+      ocrDebug = err?.debug || null;
       stage = 'error';
-    } finally {
-      e.target.value = '';
     }
+  }
+
+  async function retryWithTesseract() {
+    if (!lastFile) return;
+    await runOCR(lastFile, 'tesseract');
   }
 
   function toggleConfirm(id) {
@@ -285,6 +302,12 @@
           <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400 text-center mt-2">
             {detected.length} código{detected.length === 1 ? '' : 's'} · {ocrEngine}
           </div>
+          {#if ocrDebug}
+            <details class="mt-2 text-[10px] text-ink-400">
+              <summary class="cursor-pointer underline">debug</summary>
+              <pre class="mono mt-1 whitespace-pre-wrap break-all">{JSON.stringify(ocrDebug, null, 2)}</pre>
+            </details>
+          {/if}
         </div>
       {/if}
 
