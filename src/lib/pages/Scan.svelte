@@ -15,6 +15,7 @@
   let ocrText = $state('');
   let ocrEngine = $state('');
   let progress = $state(0);
+  let progressStage = $state('prepare'); // 'prepare' | 'load' | 'ocr'
   let errorMsg = $state('');
 
   // detected: [{ id, rawToken, sticker, dist, confirmed, customCode }]
@@ -51,29 +52,47 @@
     imageUrl = URL.createObjectURL(file);
     stage = 'processing';
     progress = 0;
+    progressStage = 'prepare';
     errorMsg = '';
     try {
-      const { text, engine } = await ocrImage(file, (p) => { progress = p; });
-      ocrText = text;
-      ocrEngine = engine;
-      const matches = matchAll(text);
+      const result = await ocrImage(file, (s, p) => {
+        progressStage = s;
+        progress = p;
+      });
+      ocrText = result.text;
+      ocrEngine = result.engine;
+      if (result.dataUrl) {
+        if (imageUrl) URL.revokeObjectURL(imageUrl);
+        imageUrl = result.dataUrl;
+      }
+      const matches = matchAll(result.text);
+      // Confirma automaticamente codigos com 2+ votos; deixa desmarcado os com 1 voto
+      // pra forcar revisao humana das deteccoes mais fracas.
       detected = matches.map((m, i) => ({
         id: `m${i}`,
         rawToken: m.rawToken,
         sticker: m.sticker,
         dist: m.dist,
-        confirmed: true,
+        votes: m.votes || 1,
+        confirmed: (m.votes || 1) >= 2,
         customCode: ''
       }));
-      stage = detected.length === 0 ? 'review' : 'review';   // mesmo se vazio, vai pra review pra add manual
+      stage = 'review';
     } catch (err) {
-      console.error(err);
+      console.error('Scan error:', err);
       errorMsg = err?.message || 'falha no OCR';
       stage = 'error';
     } finally {
       e.target.value = '';     // permite re-selecionar o mesmo arquivo
     }
   }
+
+  const progressLabel = $derived(() => {
+    if (progressStage === 'prepare') return 'Preparando imagem…';
+    if (progressStage === 'load') return 'Baixando OCR (1ª vez ~2MB)…';
+    if (progressStage === 'ocr') return 'Lendo a foto…';
+    return '';
+  });
 
   function toggleConfirm(id) {
     detected = detected.map((d) => d.id === id ? { ...d, confirmed: !d.confirmed } : d);
@@ -208,6 +227,16 @@
           <li>Diz o destino: <em>vieram de pacote</em>, <em>recebi em troca</em>, <em>saíram do bolo (entreguei)</em> ou só <em>somar</em>.</li>
         </ul>
       </div>
+
+      <div class="card p-4 text-xs text-ink-300 border border-gold-400/20">
+        <div class="font-semibold text-gold-400 mb-1.5">💡 Pra dar certo (importante!)</div>
+        <ul class="space-y-1 list-disc pl-4">
+          <li><strong>Fundo branco/claro</strong> (papel A4, mesa lisa). Tecido escuro mata o OCR.</li>
+          <li><strong>Sticker grande no enquadramento</strong> — chega perto. Se o código fica do tamanho de uma formiga, não vai ler.</li>
+          <li>Pra escanear vários: cascateia tipo baralho mostrando só o <strong>canto superior esquerdo</strong> (onde tá o código). Dá pra 20+ numa foto.</li>
+          <li>Luz uniforme, sem reflexo direto no plástico.</li>
+        </ul>
+      </div>
     </div>
 
   <!-- PROCESSING -->
@@ -217,16 +246,14 @@
         {#if imageUrl}
           <img src={imageUrl} alt="foto" class="rounded-2xl max-h-64 mx-auto" />
         {/if}
-        <h2 class="display text-xl font-bold text-white mt-4">Lendo a foto…</h2>
+        <h2 class="display text-xl font-bold text-white mt-4">{progressLabel()}</h2>
         <p class="text-xs text-ink-300 mt-1">
-          {cap.native ? 'detector nativo' : 'tesseract.js'} processando · pode levar uns segundos
+          {cap.native ? 'detector nativo' : 'tesseract.js'} · pode levar uns segundos na 1ª foto
         </p>
-        {#if progress > 0}
-          <div class="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div class="h-full bg-gold-400 transition-all" style="width: {progress}%"></div>
-          </div>
-          <div class="text-[10px] text-ink-400 mt-1">{progress}%</div>
-        {/if}
+        <div class="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
+          <div class="h-full bg-gold-400 transition-all" style="width: {progress}%"></div>
+        </div>
+        <div class="text-[10px] text-ink-400 mt-1">{progressStage} · {progress}%</div>
       </div>
     </div>
 
@@ -255,17 +282,27 @@
               <div class="flex-1 min-w-0">
                 <div class="display text-base font-bold text-white leading-none">{formatStickerLabel(d.sticker)}</div>
                 <div class="text-[10px] text-ink-400 truncate">
-                  {d.sticker.section}{d.dist > 0 ? ` · ajustado de "${d.rawToken}"` : ''}
+                  {d.sticker.section}
                 </div>
               </div>
+              <span class="text-[10px] mono shrink-0
+                           {d.votes >= 3 ? 'text-pitch-400' : d.votes >= 2 ? 'text-gold-400' : 'text-ink-400'}">
+                {d.votes}×
+              </span>
               <button class="text-ink-400 px-2 text-xs" onclick={() => removeDetected(d.id)} type="button" aria-label="remover">✕</button>
             </div>
           {/each}
         </div>
       {:else}
         <div class="card p-4 text-center text-sm text-ink-300">
-          O OCR não encontrou códigos válidos.
-          Você pode adicionar manualmente abaixo.
+          <div class="font-semibold text-white">O OCR não encontrou códigos válidos.</div>
+          <div class="mt-1">Adicione manualmente abaixo, ou tire outra foto com melhor luz.</div>
+          {#if ocrText}
+            <details class="mt-3 text-left">
+              <summary class="text-[11px] text-ink-400 cursor-pointer underline">ver texto bruto detectado</summary>
+              <pre class="mono text-[10px] text-ink-300 whitespace-pre-wrap break-all mt-2 max-h-40 overflow-y-auto">{ocrText}</pre>
+            </details>
+          {/if}
         </div>
       {/if}
 

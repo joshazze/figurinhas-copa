@@ -1,111 +1,125 @@
-// Fuzzy match de codigo de figurinha contra o album conhecido.
-// OCR pode errar ("BR4 17", "8RA17", "FWC 4"), mas como o set valido e fechado
-// e pequeno (~1028 codigos), Levenshtein <=2 corrige boa parte.
+// Casamento ESTRITO de codigo de figurinha contra o album oficial.
+//
+// Por que estrito? O verso da figurinha Panini e cheio de texto (creditos,
+// patrocinio, idiomas multiplos). OCR liberal gera centenas de falso-positivos.
+// Aqui:
+//   - so aceita prefixo que existe no album (codigo de time real, FWC, MC, CAPA)
+//   - so aceita numero dentro do intervalo valido (1-20 pra times, 1-19 pra FWC)
+//   - tolera confusoes letra<->digito comuns do OCR em posicao de digito
+//   - conta "votos" (codigo aparecendo varias vezes na foto soma confianca)
+//   - corte de emergencia: se mais de 40 candidatos sairem, exige >=2 votos
 
 import { stickers, mcStickers } from '../data/album.js';
+import { teams } from '../data/teams.js';
 
-const allStickers = [...stickers, ...mcStickers];
+const TEAM_CODES = new Set(teams.map((t) => t.code));
+const MAX_FWC = 19;
+const TEAM_MAX_NUM = 20;       // 1=escudo, 2=foto, 3-20=jogadores
 
-// Mapa de chaves normalizadas -> sticker. Inclui codigo bruto, codigo sem hifen
-// e label (no caso das MC, "BRA 13" -> "BRA13").
-const indexMap = new Map();
-for (const s of allStickers) {
-  const keys = new Set();
-  keys.add(s.code);
-  keys.add(s.code.replace(/[-\s]/g, ''));
-  if (s.label) keys.add(s.label.replace(/\s+/g, ''));
-  for (const k of keys) indexMap.set(k.toUpperCase(), s);
+const ALL = new Map();
+for (const s of [...stickers, ...mcStickers]) ALL.set(s.code, s);
+
+// Confusoes comuns letra<->digito em fontes ocr
+const DIGIT_FIX = { O: '0', I: '1', L: '1', S: '5', B: '8', G: '6', Z: '2' };
+
+function fixDigits(s) {
+  const up = s.toUpperCase();
+  return up.split('').map((c) => DIGIT_FIX[c] ?? c).join('');
 }
 
-function normalize(s) {
-  return String(s || '')
-    .toUpperCase()
-    .replace(/[\s\-_\.]/g, '')
-    .replace(/[OQ]/g, '0')       // O/0 confusion comum no OCR
-    .replace(/[IL]/g, '1');       // I/L/1 confusion
+function addVote(map, code) {
+  map.set(code, (map.get(code) || 0) + 1);
 }
 
-// Versao alternativa sem substituicao numerica (algumas confusoes sao "8" como "B").
-function normalizeLite(s) {
-  return String(s || '').toUpperCase().replace(/[\s\-_\.]/g, '');
+// Verifica se um trecho de letras e "majoritariamente uppercase".
+// Codigos da Panini sao SEMPRE CAIXA-ALTA. Texto legal/multilingue do verso
+// vem em case misto ou minuscula. Esse filtro elimina ~todo o ruido sem
+// precisar de regex semantico complexo.
+function isUpperish(s, minRatio = 0.6) {
+  const letters = s.match(/[A-Za-z]/g);
+  if (!letters || letters.length === 0) return false;
+  let upper = 0;
+  for (const c of letters) if (c >= 'A' && c <= 'Z') upper++;
+  return upper / letters.length >= minRatio;
 }
 
-function levenshtein(a, b) {
-  if (a === b) return 0;
-  const la = a.length;
-  const lb = b.length;
-  if (Math.abs(la - lb) > 2) return Infinity;
-  if (la === 0) return lb;
-  if (lb === 0) return la;
-  let prev = new Array(lb + 1);
-  let cur = new Array(lb + 1);
-  for (let j = 0; j <= lb; j++) prev[j] = j;
-  for (let i = 1; i <= la; i++) {
-    cur[0] = i;
-    for (let j = 1; j <= lb; j++) {
-      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
-    }
-    [prev, cur] = [cur, prev];
-  }
-  return prev[lb];
-}
-
-// Tenta casar um token com o album. Retorna { sticker, dist } ou null.
-export function matchToken(token, maxDist = 2) {
-  if (!token) return null;
-  // 1) match exato (normalize lite)
-  const lite = normalizeLite(token);
-  if (indexMap.has(lite)) return { sticker: indexMap.get(lite), dist: 0 };
-  // 2) match exato (normalize com substituicoes)
-  const sub = normalize(token);
-  if (indexMap.has(sub)) return { sticker: indexMap.get(sub), dist: 0 };
-  // 3) fuzzy: escolhe o menor levenshtein, prefere lite
-  let best = null;
-  for (const [key, sticker] of indexMap) {
-    if (Math.abs(key.length - lite.length) > maxDist) continue;
-    const d = Math.min(levenshtein(lite, key), levenshtein(sub, key));
-    if (d <= maxDist && (best === null || d < best.dist)) {
-      best = { sticker, dist: d };
-      if (d === 0) break;
-    }
-  }
-  return best;
-}
-
-// Quebra texto do OCR em candidatos plausiveis. Regex generoso, com normalizacao.
+// Extrai candidatos validos do texto bruto.
+// Retorna [{ code, votes }] ordenado por votos desc.
 export function extractCandidates(text) {
   if (!text) return [];
-  const found = new Set();
-  // varre por janelas tokenizadas (separa por espaços/quebras), depois tenta
-  // colar dois tokens vizinhos pra capturar "BRA 17" (separados).
-  const raw = text.replace(/[\n\r\t]+/g, ' ').split(/\s+/).filter(Boolean);
-  const push = (v) => { if (v) found.add(v); };
-  for (let i = 0; i < raw.length; i++) {
-    push(raw[i]);
-    if (i + 1 < raw.length) push(raw[i] + raw[i + 1]);
-  }
-  // tambem captura padroes embutidos (sem espaco) como BRA17 em strings maiores
-  const inline = text.match(/[A-Za-z]{2,4}-?\s?\d{1,2}/g) || [];
-  for (const m of inline) push(m);
-  // MC sem numero
-  const mc = text.match(/MC\s*-?\s*[A-Za-z]{2,4}/g) || [];
-  for (const m of mc) push(m);
-  // CAPA
-  if (/\bCAPA\b/i.test(text)) push('CAPA');
-  return [...found];
-}
+  const found = new Map();
+  // Sanitiza minimo: mantem case original, remove apenas controles exoticos
+  const clean = String(text).replace(/[^\x20-\x7E\n\r\t]/g, ' ');
 
-export function matchAll(text, maxDist = 2) {
-  const candidates = extractCandidates(text);
-  const out = [];
-  const seenCodes = new Set();
-  for (const t of candidates) {
-    const hit = matchToken(t, maxDist);
-    if (hit && !seenCodes.has(hit.sticker.code)) {
-      seenCodes.add(hit.sticker.code);
-      out.push({ rawToken: t.trim(), sticker: hit.sticker, dist: hit.dist });
+  // Pattern 1: prefixo (qualquer case na regex) + sep opcional + digito/letra-conf
+  // Mas exigimos no codigo que o prefixo seja UPPER (signal de codigo Panini).
+  const codeRegex = /\b([A-Za-z]{2,5})[\s\-]?([0-9OILSGBZoilsgbz]{1,2})\b/g;
+  let m;
+  while ((m = codeRegex.exec(clean)) !== null) {
+    const prefixRaw = m[1];
+    const digitsRaw = m[2];
+    // SO uppercase passa — codigos Panini sao todos em maiuscula
+    if (!isUpperish(prefixRaw, 0.8)) continue;
+    // o "numero" precisa ter ao menos um digito real
+    if (!/[0-9]/.test(digitsRaw)) continue;
+    const prefix = prefixRaw.toUpperCase();
+    const digits = fixDigits(digitsRaw.toUpperCase());
+    if (!/^\d{1,2}$/.test(digits)) continue;
+    const n = parseInt(digits, 10);
+    if (isNaN(n) || n < 1) continue;
+
+    if (prefix === 'FWC') {
+      if (n <= MAX_FWC) addVote(found, `FWC${n}`);
+    } else if (TEAM_CODES.has(prefix)) {
+      if (n <= TEAM_MAX_NUM) addVote(found, `${prefix}${n}`);
     }
   }
+
+  // Pattern 2: MC + codigo de time, com o mesmo filtro de case
+  const mcRegex = /\b(MC)[\s\-]?([A-Za-z]{2,5})\b/g;
+  while ((m = mcRegex.exec(clean)) !== null) {
+    const mcRaw = m[1];
+    const teamRaw = m[2];
+    if (!isUpperish(mcRaw, 1) || !isUpperish(teamRaw, 0.8)) continue;
+    const team = teamRaw.toUpperCase();
+    if (TEAM_CODES.has(team)) addVote(found, `MC-${team}`);
+  }
+
+  // Pattern 3: CAPA exato (uppercase)
+  if (/\bCAPA\b/.test(clean)) addVote(found, 'CAPA');
+
+  // Saneamento: se sair muito candidato (foto barulhenta), exige >=2 votos
+  let entries = [...found.entries()];
+  if (entries.length > 25) entries = entries.filter(([, v]) => v >= 2);
+
+  entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return entries.map(([code, votes]) => ({ code, votes }));
+}
+
+// Casa o texto contra o album. Cada resultado vem com sticker ja resolvido.
+export function matchAll(text) {
+  const out = [];
+  for (const { code, votes } of extractCandidates(text)) {
+    const sticker = ALL.get(code);
+    if (sticker) out.push({ rawToken: code, sticker, dist: 0, votes });
+  }
   return out;
+}
+
+// Casamento de UM token (usado em bulk-add manual). Sem fuzzy.
+export function matchToken(token) {
+  if (!token) return null;
+  const compact = String(token).toUpperCase().replace(/[\s\-_]/g, '');
+  if (ALL.has(compact)) return { sticker: ALL.get(compact), dist: 0 };
+  // Tenta extrair como se fosse texto pequeno
+  const cands = extractCandidates(token);
+  if (cands.length > 0 && ALL.has(cands[0].code)) {
+    return { sticker: ALL.get(cands[0].code), dist: 0 };
+  }
+  // Casa MC explicito
+  if (compact.startsWith('MC')) {
+    const key = 'MC-' + compact.slice(2);
+    if (ALL.has(key)) return { sticker: ALL.get(key), dist: 0 };
+  }
+  return null;
 }

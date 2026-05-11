@@ -1,7 +1,10 @@
 <script>
   import { appState, setStickerCount, addSticker } from '../stores/appState.svelte.js';
 
-  let { sticker } = $props();
+  // onOpen: callback opcional. Quando fornecido, qualquer interacao (tap OU long-press)
+  // abre o menu de acoes da figurinha. Sem callback, o comportamento legado e mantido
+  // (tap incrementa, long-press zera).
+  let { sticker, onOpen = null } = $props();
 
   const count = $derived(appState.collected[sticker.code] || 0);
   const have = $derived(count > 0);
@@ -9,10 +12,10 @@
   const display = $derived(sticker.label || sticker.code);
 
   let pressTimer = null;
+  let longPressFired = false;
 
-  function tap() {
+  function legacyTap() {
     if (have) {
-      // Incrementa repetida ate 9, depois zera
       if (count >= 9) setStickerCount(sticker.code, 0);
       else addSticker(sticker.code, 1);
     } else {
@@ -21,19 +24,24 @@
   }
 
   function pressStart() {
+    longPressFired = false;
     pressTimer = setTimeout(() => {
-      // Long press: zera
-      setStickerCount(sticker.code, 0);
+      longPressFired = true;
       pressTimer = null;
+      if (typeof onOpen === 'function') onOpen(sticker);
+      else setStickerCount(sticker.code, 0);    // legacy: zera
     }, 450);
   }
+
   function pressEnd() {
     if (pressTimer) {
       clearTimeout(pressTimer);
       pressTimer = null;
-      tap();
+      if (typeof onOpen === 'function') onOpen(sticker);
+      else legacyTap();
     }
   }
+
   function pressCancel() {
     if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
   }
@@ -46,6 +54,7 @@
   onpointerup={pressEnd}
   onpointerleave={pressCancel}
   onpointercancel={pressCancel}
+  oncontextmenu={(e) => e.preventDefault()}
   aria-label={`${display} — ${sticker.name}${have ? ` (tem ${count})` : ''}`}
 >
   <div class="flex flex-col items-center gap-0.5 select-none pointer-events-none">
