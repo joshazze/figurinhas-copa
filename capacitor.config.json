@@ -1,6 +1,6 @@
 {
-  "appId": "com.joshazze.figurinhascopa",
-  "appName": "Figurinhas Copa",
+  "appId": "com.joshazze.figs",
+  "appName": "Figs",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

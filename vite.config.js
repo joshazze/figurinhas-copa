@@ -27,9 +27,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Figurinhas Copa 2026 · Somos 26',
-        short_name: 'Copa 2026',
-        description: 'Álbum da Copa do Mundo FIFA 2026 — USA · Canadá · México · 48 seleções · 980 figurinhas',
+        name: 'Figs — Cromos da Copa 2026',
+        short_name: 'Figs',
+        description: 'App de bolso pro álbum da Copa 2026. 48 seleções · 980 figurinhas · pacotes, trocas e scan.',
         theme_color: '#050b1f',
         background_color: '#050b1f',
         display: 'standalone',
