@@ -72,10 +72,15 @@ export default {
         shimmer: {
           '0%':   { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' }
+        },
+        pulseSlide: {
+          '0%':   { left: '-33%' },
+          '100%': { left: '100%' }
         }
       },
       animation: {
-        shimmer: 'shimmer 6s linear infinite'
+        shimmer: 'shimmer 6s linear infinite',
+        'pulse-slide': 'pulseSlide 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite'
       }
     }
   },

@@ -133,7 +133,7 @@
         </div>
         <a href="#album" class="text-[11px] text-ink-300 underline">ver álbum</a>
       </div>
-      <div class="scrollx flex gap-2 overflow-x-auto px-5 pb-1 -mr-5">
+      <div class="scrollx flex gap-2 overflow-x-auto px-5 pb-1">
         {#each closingSoon() as t (t.team)}
           <a href={`#album`} class="shrink-0 w-[140px] rounded-2xl bg-white/[0.04] border border-white/10
                                     p-3 hover:bg-white/[0.07] transition tricolor-bar relative overflow-hidden">

@@ -63,15 +63,54 @@
     return { p, total, sticks, action, accent };
   }
 
+  function describeCommitment(log) {
+    const c = log.commitment || {};
+    const s = lookup(c.code);
+    const display = s?.label || s?.code || c.code || '?';
+    let action, accent, icon;
+    if (log.type === 'commitment_added') {
+      if (c.type === 'give') {
+        action = `prometeu ${display} pra ${c.person}`;
+        accent = ACCENTS.flag;
+      } else {
+        action = `${c.person} prometeu ${display}`;
+        accent = ACCENTS.pitch;
+      }
+      icon = 'add';
+    } else if (log.type === 'commitment_removed') {
+      action = `compromisso ${display} cancelado`;
+      accent = ACCENTS.sky;
+      icon = 'cancel';
+    } else {
+      // fulfilled
+      if (c.type === 'give') {
+        action = `entregou ${display} pra ${c.person}`;
+        accent = ACCENTS.flag;
+      } else {
+        action = `recebeu ${display} de ${c.person}`;
+        accent = ACCENTS.pitch;
+      }
+      icon = 'check';
+    }
+    return { display, action, accent, icon, c };
+  }
+
   const filtered = $derived(() => {
     const q = query.trim().toLowerCase();
     return appState.logs.filter((log) => {
       if (filter === 'sticker' && log.type !== 'sticker') return false;
       if (filter === 'pack' && !log.type.startsWith('pack')) return false;
+      if (filter === 'commitment' && !log.type.startsWith('commitment')) return false;
       if (!q) return true;
       if (log.type === 'sticker') {
         const s = lookup(log.code);
         const hay = `${log.code} ${s?.label || ''} ${s?.name || ''} ${s?.section || ''}`.toLowerCase();
+        return hay.includes(q);
+      }
+      if (log.type.startsWith('commitment')) {
+        const c = log.commitment || {};
+        const s = lookup(c.code);
+        const hay = `${c.code || ''} ${c.person || ''} ${s?.label || ''} ${s?.section || ''}`.toLowerCase();
         return hay.includes(q);
       }
       const p = log.pack || {};
@@ -108,21 +147,27 @@
   </Header>
 
   <div class="px-5">
-    <div class="card p-4 grid grid-cols-3 gap-3">
+    <div class="card p-4 grid grid-cols-4 gap-2 text-center">
       <div>
-        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">total</div>
-        <div class="num text-2xl text-white mt-1">{appState.logs.length}</div>
+        <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300">total</div>
+        <div class="num text-xl text-white mt-1">{appState.logs.length}</div>
       </div>
       <div>
-        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">figurinhas</div>
-        <div class="num text-2xl text-pitch-400 mt-1">
+        <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300">figurinhas</div>
+        <div class="num text-xl text-pitch-400 mt-1">
           {appState.logs.filter(l => l.type === 'sticker').length}
         </div>
       </div>
       <div>
-        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">pacotes</div>
-        <div class="num text-2xl text-flag-400 mt-1">
+        <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300">pacotes</div>
+        <div class="num text-xl text-flag-400 mt-1">
           {appState.logs.filter(l => l.type.startsWith('pack')).length}
+        </div>
+      </div>
+      <div>
+        <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300">tratos</div>
+        <div class="num text-xl text-gold-400 mt-1">
+          {appState.logs.filter(l => l.type.startsWith('commitment')).length}
         </div>
       </div>
     </div>
@@ -138,9 +183,10 @@
 
     <div class="mt-3 flex gap-2 overflow-x-auto scrollx -mx-5 px-5 pb-1">
       {#each [
-        { id: 'all',     label: 'Tudo' },
-        { id: 'sticker', label: 'Figurinhas' },
-        { id: 'pack',    label: 'Pacotes' }
+        { id: 'all',         label: 'Tudo' },
+        { id: 'sticker',     label: 'Figurinhas' },
+        { id: 'pack',        label: 'Pacotes' },
+        { id: 'commitment',  label: 'Tratos' }
       ] as f}
         <button
           type="button"
@@ -181,7 +227,7 @@
                   <div class="text-xs text-ink-300 mono">{fmtTime(log.ts)}</div>
                 </div>
               </div>
-            {:else}
+            {:else if log.type === 'pack_added' || log.type === 'pack_removed'}
               {@const d = describePack(log)}
               <div class="flex items-center gap-3 p-3">
                 <div class="h-10 w-10 grid place-items-center rounded-xl border {d.accent}">
@@ -198,6 +244,28 @@
                   <div class="text-xs text-ink-300 flex items-center gap-1.5 flex-wrap">
                     <span class="px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-200">{d.p.source || 'mc'}</span>
                     <span>{fmtTime(log.ts)} · {d.sticks} figurinhas</span>
+                  </div>
+                </div>
+              </div>
+            {:else if log.type.startsWith('commitment')}
+              {@const d = describeCommitment(log)}
+              <div class="flex items-center gap-3 p-3">
+                <div class="h-10 w-10 grid place-items-center rounded-xl border {d.accent}">
+                  {#if d.icon === 'add'}
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  {:else if d.icon === 'check'}
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5 9-11" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  {:else}
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M6 18L18 6" stroke-linecap="round"/></svg>
+                  {/if}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-semibold text-white truncate">{d.action}</div>
+                  <div class="text-xs text-ink-300 flex items-center gap-1.5 flex-wrap">
+                    <span class="px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-200">
+                      {log.type === 'commitment_added' ? 'novo' : log.type === 'commitment_fulfilled' ? 'concluído' : 'cancelado'}
+                    </span>
+                    <span>{fmtTime(log.ts)}</span>
                   </div>
                 </div>
               </div>
