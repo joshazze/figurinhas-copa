@@ -3,7 +3,8 @@
 // Agora: erro do Paddle SOBE pra UI mostrar pro user; debug info exposto.
 
 const TESSERACT_URL = 'https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js';
-const MAX_DIM = 3200;
+const MAX_DIM = 2000;      // mantem detalhe legivel sem encher RAM no iPhone
+const THUMB_DIM = 900;     // canvas separado pequeno pra preview na review
 
 let paddlePromise = null;
 let tessLoadPromise = null;
@@ -86,7 +87,7 @@ async function fileToImage(file) {
   });
 }
 
-function imageToCanvas(img, rotate = 0) {
+function imageToCanvas(img, rotate = 0, filter = null) {
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
   if (!w || !h) throw new OCRError('Imagem sem dimensões.', null, {});
@@ -102,6 +103,7 @@ function imageToCanvas(img, rotate = 0) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
+  if (filter) ctx.filter = filter;       // CSS filter: contrast(1.4) saturate(0.4) etc.
   ctx.translate(cw / 2, ch / 2);
   ctx.rotate((rotate * Math.PI) / 180);
   ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
@@ -117,11 +119,20 @@ function canvasToBlob(canvas, quality = 0.92) {
 // --- API publica ---
 // onUpdate({ phase, percent? }) — phase: 'prepare' | 'engine' | 'models' | 'ready' | 'ocr'
 //
-// Tenta PaddleOCR. Em caso de erro, SOBE pro caller. Caller decide se quer
-// pedir fallback Tesseract manualmente via ocrTesseract().
+// Multi-pass voting: roda OCR em varias versoes da MESMA imagem (rotacao +
+// variacao de contraste/sharpness) e agrega resultados. Codigo que aparece em
+// 2+ passes = alta confianca; 1 pass = baixa (user revisa).
+//
+// Passes definidos (ordem importa pra short-circuit):
+//   1. 0°    sem filtro       (referencia)
+//   2. 90°   sem filtro       (cascade orientation)
+//   3. 0°    contraste 1.4    (badge ficou claro?)
+//   4. 90°   contraste 1.4    (idem rotacionado)
+//
+// Cada pass libera blob/url logo depois pra nao acumular memoria no iPhone.
 export async function ocrPaddle(file, onUpdate) {
   const update = (phase, percent) => onUpdate?.({ phase, percent });
-  const debug = { engine: 'paddleocr', timings: {} };
+  const debug = { engine: 'paddleocr', timings: {}, passes: [] };
 
   update('prepare');
   const t0 = Date.now();
@@ -129,42 +140,86 @@ export async function ocrPaddle(file, onUpdate) {
   debug.timings.decode = Date.now() - t0;
   debug.imgSize = { w: img.naturalWidth, h: img.naturalHeight };
 
-  const t1 = Date.now();
+  const tLoad = Date.now();
   const ocr = await loadPaddle((phase) => update(phase));
-  debug.timings.load = Date.now() - t1;
+  debug.timings.load = Date.now() - tLoad;
 
-  update('ocr', 5);
-  const c0 = imageToCanvas(img, 0);
-  const c90 = imageToCanvas(img, 90);
-  debug.canvasSize = { w0: c0.width, h0: c0.height, w90: c90.width, h90: c90.height };
-  const [b0, b90] = await Promise.all([canvasToBlob(c0), canvasToBlob(c90)]);
-  // BUG FIX: @gutenye/ocr-browser usa `image.src = url` internamente.
-  // Precisa ser URL string, NAO Blob. Sem isso, decode() rejeita silencioso
-  // e detect() retorna [] sem erro visivel.
-  const u0 = URL.createObjectURL(b0);
-  const u90 = URL.createObjectURL(b90);
-  update('ocr', 25);
+  // Define os passes
+  const passes = [
+    { name: '0°', rotate: 0, filter: null },
+    { name: '90°', rotate: 90, filter: null },
+    { name: '0°+contr', rotate: 0, filter: 'contrast(1.35) saturate(0.5) brightness(1.05)' },
+    { name: '90°+contr', rotate: 90, filter: 'contrast(1.35) saturate(0.5) brightness(1.05)' }
+  ];
 
-  const t2 = Date.now();
-  let lines0 = [], lines90 = [];
-  const errors = [];
-  try { lines0 = await ocr.detect(u0); } catch (e) { errors.push({ rot: 0, error: e?.message || String(e) }); }
-  update('ocr', 65);
-  try { lines90 = await ocr.detect(u90); } catch (e) { errors.push({ rot: 90, error: e?.message || String(e) }); }
-  URL.revokeObjectURL(u0);
-  URL.revokeObjectURL(u90);
-  debug.timings.detect = Date.now() - t2;
-  debug.detections = { rot0: lines0?.length || 0, rot90: lines90?.length || 0 };
-  if (errors.length > 0) debug.errors = errors;
+  // Thumb pequeno pra preview da review — gerado ANTES dos passes pra poder
+  // liberar a img full-res caso necessario.
+  const thumbCanvas = imageToCanvas(img, 0);
+  // Reduz thumb pra dataUrl ocupar pouca memoria
+  let thumbDataUrl;
+  {
+    const tw = thumbCanvas.width, th = thumbCanvas.height;
+    const tscale = Math.min(1, THUMB_DIM / Math.max(tw, th));
+    const tc = document.createElement('canvas');
+    tc.width = Math.round(tw * tscale);
+    tc.height = Math.round(th * tscale);
+    tc.getContext('2d').drawImage(thumbCanvas, 0, 0, tc.width, tc.height);
+    thumbDataUrl = tc.toDataURL('image/jpeg', 0.78);
+    tc.width = 0; tc.height = 0;
+    thumbCanvas.width = 0; thumbCanvas.height = 0;
+  }
+
+  const allLines = [];
+  const tDetect = Date.now();
+
+  for (let i = 0; i < passes.length; i++) {
+    const p = passes[i];
+    update('ocr', 10 + Math.round((i / passes.length) * 85));
+    const tPass = Date.now();
+
+    // Cria, processa e LIBERA canvas/blob/url dentro do mesmo bloco
+    let canvas, blob, url, lines = [], err = null;
+    try {
+      canvas = imageToCanvas(img, p.rotate, p.filter);
+      blob = await canvasToBlob(canvas, 0.92);
+      // libera canvas IMEDIATAMENTE — blob ja tem os bytes
+      canvas.width = 0; canvas.height = 0;
+      canvas = null;
+      url = URL.createObjectURL(blob);
+      blob = null;     // url segura referencia interna
+      lines = await ocr.detect(url);
+    } catch (e) {
+      err = e?.message || String(e);
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+      url = null;
+    }
+
+    debug.passes.push({
+      pass: p.name,
+      lines: lines?.length || 0,
+      ms: Date.now() - tPass,
+      err
+    });
+    if (lines?.length > 0) {
+      for (const l of lines) allLines.push({ ...l, pass: p.name });
+    }
+
+    // pausa breve permite o navegador respirar/coletar lixo entre passes
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  debug.timings.detect = Date.now() - tDetect;
+  debug.totalLines = allLines.length;
 
   update('ocr', 100);
-  const lines = [...(lines0 || []), ...(lines90 || [])];
-  const text = lines.map((l) => l.text || '').join('\n');
+  const text = allLines.map((l) => l.text || '').join('\n');
 
   return {
     text,
+    lines: allLines,        // pra multi-pass voting no codeMatch
     engine: 'paddleocr',
-    dataUrl: c0.toDataURL('image/jpeg', 0.85),
+    dataUrl: thumbDataUrl,
     debug
   };
 }

@@ -1,7 +1,7 @@
 <script>
   import Header from '../components/Header.svelte';
   import { ocrPaddle, ocrTesseract, prewarmPaddleOCR } from '../utils/ocr.js';
-  import { matchAll } from '../utils/codeMatch.js';
+  import { matchAll, matchAllWithPasses } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
   import {
     addSticker, addPack, fulfillExpect, fulfillGive,
@@ -11,7 +11,7 @@
 
   // Versao bumpada a cada deploy do Scan/OCR pra confirmar que o cache do PWA
   // pegou o build novo. Visivel no header da aba.
-  const SCAN_VERSION = '2.1.3';
+  const SCAN_VERSION = '2.1.4';
 
   // Pre-warm engine quando user abre a aba
   $effect(() => {
@@ -92,12 +92,24 @@
       ocrEngine = result.engine;
       ocrDebug = result.debug;
       if (result.dataUrl) imageUrl = result.dataUrl;
-      const matches = matchAll(result.text);
+      // Se temos lines com pass info (PaddleOCR multi-pass), usa voting
+      // baseado em passes diferentes — codigo em 2+ passes = alta confianca.
+      const matches = result.lines
+        ? matchAllWithPasses(result.lines).map((m) => ({
+            sticker: stickerByCode[m.code] || mcStickerByCode[m.code],
+            code: m.code,
+            votes: m.votes,
+            passes: m.passes
+          })).filter((m) => m.sticker)
+        : matchAll(result.text);
       detected = matches.map((m, i) => ({
         id: `m${i}`,
         sticker: m.sticker,
         votes: m.votes || 1,
-        confirmed: (m.votes || 1) >= 1,
+        passes: m.passes || [],
+        // confirma automaticamente se aparece em 2+ passes (alta confianca);
+        // 1 pass desmarcado pra forcar revisao humana
+        confirmed: (m.votes || 1) >= 2,
         variant: 'album'
       }));
       stage = 'review';
@@ -356,9 +368,19 @@
                   </div>
                 {/if}
               </div>
-              {#if d.votes > 1}
-                <span class="text-[10px] mono shrink-0 text-pitch-400">{d.votes}×</span>
-              {/if}
+              <div class="shrink-0 flex flex-col items-end gap-0.5">
+                <span class="text-[10px] mono
+                             {d.votes >= 3 ? 'text-pitch-400' : d.votes === 2 ? 'text-gold-400' : 'text-ink-400'}">
+                  {d.votes}/4
+                </span>
+                {#if d.votes >= 3}
+                  <span class="text-[9px] text-pitch-400 uppercase">alta</span>
+                {:else if d.votes === 2}
+                  <span class="text-[9px] text-gold-400 uppercase">média</span>
+                {:else}
+                  <span class="text-[9px] text-ink-400 uppercase">baixa</span>
+                {/if}
+              </div>
               <button class="text-ink-400 px-2 text-xs" onclick={() => removeDetected(d.id)} type="button" aria-label="remover">✕</button>
             </div>
           {/each}

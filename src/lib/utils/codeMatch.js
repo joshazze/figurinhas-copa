@@ -96,6 +96,37 @@ export function extractCandidates(text) {
   return entries.map(([code, votes]) => ({ code, votes }));
 }
 
+// Versao que considera passes (multi-pass voting): codigo que aparece em
+// PASSES DIFERENTES vale mais que codigo aparecendo varias vezes no mesmo pass.
+// Recebe lines [{ text, pass }], retorna [{ code, votes, passes }].
+export function matchAllWithPasses(lines) {
+  // Agrupa text por pass primeiro
+  const byPass = new Map();
+  for (const l of lines || []) {
+    const key = l.pass || 'default';
+    if (!byPass.has(key)) byPass.set(key, []);
+    byPass.get(key).push(l.text || '');
+  }
+
+  // Pra cada pass, extrai candidatos (uma vez por pass — codigo aparece N vezes
+  // no mesmo pass conta como 1 voto desse pass)
+  const codeToPasses = new Map();
+  for (const [pass, texts] of byPass) {
+    const cands = extractCandidates(texts.join(' '));
+    for (const { code } of cands) {
+      if (!codeToPasses.has(code)) codeToPasses.set(code, new Set());
+      codeToPasses.get(code).add(pass);
+    }
+  }
+
+  const out = [];
+  for (const [code, passes] of codeToPasses) {
+    out.push({ code, votes: passes.size, passes: [...passes] });
+  }
+  out.sort((a, b) => b.votes - a.votes || a.code.localeCompare(b.code));
+  return out;
+}
+
 // Casa o texto contra o album. Cada resultado vem com sticker ja resolvido.
 export function matchAll(text) {
   const out = [];
