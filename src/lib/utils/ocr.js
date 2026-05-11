@@ -103,6 +103,11 @@ export async function ocrImage(file, onStage) {
 
   stage('ocr', 0);
   let lastP = 0;
+  // PSM 11 = "sparse text without OSD": Tesseract acha tokens isolados pela imagem
+  // (perfeito pra selo de codigo num canto da figurinha) e ignora paragrafos
+  // contínuos de texto legal sem perder os achados pequenos.
+  // Sem char_whitelist: preserva case original — codigos sao em CAIXA-ALTA,
+  // texto legal vem em case misto, e a gente filtra por isso no matcher.
   const { data } = await T.recognize(canvas, 'eng', {
     logger: (m) => {
       if (m.status === 'recognizing text') {
@@ -112,7 +117,7 @@ export async function ocrImage(file, onStage) {
         stage('load', Math.round(m.progress * 100));
       }
     },
-    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -'
+    tessedit_pageseg_mode: '11'
   });
   stage('ocr', 100);
   return {

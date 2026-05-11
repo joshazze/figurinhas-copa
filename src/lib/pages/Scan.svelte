@@ -227,6 +227,16 @@
           <li>Diz o destino: <em>vieram de pacote</em>, <em>recebi em troca</em>, <em>saíram do bolo (entreguei)</em> ou só <em>somar</em>.</li>
         </ul>
       </div>
+
+      <div class="card p-4 text-xs text-ink-300 border border-gold-400/20">
+        <div class="font-semibold text-gold-400 mb-1.5">💡 Pra dar certo (importante!)</div>
+        <ul class="space-y-1 list-disc pl-4">
+          <li><strong>Fundo branco/claro</strong> (papel A4, mesa lisa). Tecido escuro mata o OCR.</li>
+          <li><strong>Sticker grande no enquadramento</strong> — chega perto. Se o código fica do tamanho de uma formiga, não vai ler.</li>
+          <li>Pra escanear vários: cascateia tipo baralho mostrando só o <strong>canto superior esquerdo</strong> (onde tá o código). Dá pra 20+ numa foto.</li>
+          <li>Luz uniforme, sem reflexo direto no plástico.</li>
+        </ul>
+      </div>
     </div>
 
   <!-- PROCESSING -->
