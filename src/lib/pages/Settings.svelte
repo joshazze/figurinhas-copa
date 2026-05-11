@@ -68,11 +68,11 @@
       </p>
       <div class="mt-3 grid grid-cols-2 gap-2">
         <button class="btn btn-ghost" type="button" onclick={downloadBackup}>
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21V9m0 0L8 13m4-4l4 4M5 3h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
           exportar
         </button>
         <button class="btn btn-ghost" type="button" onclick={pickFile}>
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21V9m0 0L8 13m4-4l4 4M5 3h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
           importar
         </button>
       </div>

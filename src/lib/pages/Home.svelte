@@ -4,9 +4,11 @@
     uniqueOwned, totalDuplicates, totalSpent, totalPacks,
     avgPackCost, avgStickerCost, completionPct, totalMissing, estimatedRemainingCost,
     uniqueSpecialOwned, totalSpecialStickers,
-    teamProgressSummary, totalCommittedToGive, totalCommittedToReceive
+    teamProgressSummary, totalCommittedToGive, totalCommittedToReceive,
+    commitmentsByType, lookupSticker
   } from '../stores/derived.svelte.js';
-  import { appState } from '../stores/appState.svelte.js';
+  import { appState, fulfillExpect, fulfillGive } from '../stores/appState.svelte.js';
+  import { formatStickerLabel } from '../utils/format.js';
 
   import Header from '../components/Header.svelte';
   import ProgressRing from '../components/ProgressRing.svelte';
@@ -28,6 +30,48 @@
   const closingSoon = $derived(() => teamProgressSummary().slice(0, 8));
 
   const openCommitments = $derived(() => totalCommittedToGive() + totalCommittedToReceive());
+  const expectingPreview = $derived(() => commitmentsByType('expect').slice(0, 3));
+  const givingPreview = $derived(() => commitmentsByType('give').slice(0, 3));
+
+  // ultima atividade (3 mais recentes que sao tap/scan/pack)
+  const recentLogs = $derived(() => appState.logs.slice(0, 4));
+
+  function logSummary(log) {
+    if (log.type === 'pack_added') return `+1 pacote ${log.pack?.source || ''}`;
+    if (log.type === 'pack_removed') return 'pacote removido';
+    if (log.type === 'sticker') {
+      const s = lookupSticker(log.code);
+      const label = s ? formatStickerLabel(s) : log.code;
+      if (log.next === 0) return `${label} zerada`;
+      if (log.prev === 0) return `${label} marcada`;
+      return `${label} → ×${log.next}`;
+    }
+    if (log.type === 'commitment_added') {
+      const c = log.commitment;
+      const s = c ? lookupSticker(c.code) : null;
+      const label = s ? formatStickerLabel(s) : c?.code;
+      return c?.type === 'give'
+        ? `prometi ${label} pra ${c.person}`
+        : `${c?.person} prometeu ${label}`;
+    }
+    if (log.type === 'commitment_fulfilled') {
+      const c = log.commitment;
+      const s = c ? lookupSticker(c.code) : null;
+      const label = s ? formatStickerLabel(s) : c?.code;
+      return c?.type === 'give' ? `entreguei ${label}` : `recebi ${label}`;
+    }
+    return log.type;
+  }
+
+  function logTime(iso) {
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = (now - d) / 1000;
+    if (diff < 60) return 'agora';
+    if (diff < 3600) return `${Math.floor(diff / 60)}min`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+    return `${Math.floor(diff / 86400)}d`;
+  }
 </script>
 
 <section class="screen-enter pb-32">
@@ -109,34 +153,118 @@
     </div>
   {/if}
 
-  <!-- Atalhos / Compromissos -->
-  <div class="px-5 mt-4 grid grid-cols-2 gap-3">
-    <a href="#packs" class="card p-4 flex items-center gap-3 hover:bg-white/[0.06] transition">
-      <div class="h-10 w-10 grid place-items-center rounded-xl bg-flag-400/15 text-flag-400 border border-flag-400/30 shrink-0">
-        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+  <!-- Atalhos: Scan + Pacote + Repetidas -->
+  <div class="px-5 mt-4 grid grid-cols-3 gap-2">
+    <a href="#scan" class="card p-3 flex flex-col items-center gap-1 hover:bg-white/[0.06] transition text-center">
+      <div class="h-9 w-9 grid place-items-center rounded-xl bg-gold-400/15 text-gold-400 border border-gold-400/30">
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M3 7h3l2-2h8l2 2h3v12H3z" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="13" r="3.5"/>
         </svg>
       </div>
-      <div class="min-w-0">
-        <div class="font-semibold text-white truncate">Novo pacote</div>
-        <div class="text-xs text-ink-300 truncate">Registrar abertura</div>
-      </div>
+      <div class="text-[11px] font-semibold text-white">Scan</div>
+      <div class="text-[10px] text-ink-400">foto → ação</div>
     </a>
-    <a href="#dups" class="card p-4 flex items-center gap-3 hover:bg-white/[0.06] transition relative">
-      <div class="h-10 w-10 grid place-items-center rounded-xl bg-gold-400/15 text-gold-400 border border-gold-400/30 shrink-0">
-        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8">
+    <a href="#packs" class="card p-3 flex flex-col items-center gap-1 hover:bg-white/[0.06] transition text-center">
+      <div class="h-9 w-9 grid place-items-center rounded-xl bg-flag-400/15 text-flag-400 border border-flag-400/30">
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4M3 17l9 4 9-4" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="text-[11px] font-semibold text-white">Pacote</div>
+      <div class="text-[10px] text-ink-400">registrar</div>
+    </a>
+    <a href="#dups" class="card p-3 flex flex-col items-center gap-1 hover:bg-white/[0.06] transition text-center relative">
+      <div class="h-9 w-9 grid place-items-center rounded-xl bg-pitch-400/15 text-pitch-400 border border-pitch-400/30">
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8">
           <path d="M8 8h11v11H8zM5 5h11v11H5z" stroke-linejoin="round"/>
         </svg>
       </div>
-      <div class="min-w-0 flex-1">
-        <div class="font-semibold text-white truncate">Repetidas</div>
-        <div class="text-xs text-ink-300 truncate">{totalDuplicates()} disponíveis</div>
-      </div>
+      <div class="text-[11px] font-semibold text-white">Trocar</div>
+      <div class="text-[10px] text-ink-400">{totalDuplicates()} repet.</div>
       {#if openCommitments() > 0}
-        <span class="chip !py-0 !px-2 !text-[10px] chip-coral">{openCommitments()}</span>
+        <span class="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-flag-500 text-[9px] text-white grid place-items-center font-bold border border-ink-950">
+          {openCommitments()}
+        </span>
       {/if}
     </a>
   </div>
+
+  <!-- Compromissos abertos -->
+  {#if openCommitments() > 0}
+    <div class="px-5 mt-4">
+      <div class="flex items-end justify-between mb-2">
+        <div>
+          <div class="text-[10px] uppercase tracking-[0.22em] text-ink-300">Compromissos</div>
+          <h2 class="display text-base font-semibold text-white leading-none mt-1">Em aberto</h2>
+        </div>
+        <a href="#dups" class="text-[11px] text-ink-300 underline">ver todos</a>
+      </div>
+      <div class="space-y-2">
+        {#if expectingPreview().length > 0}
+          <div class="card p-3">
+            <div class="text-[10px] uppercase tracking-[0.18em] text-pitch-400 mb-1.5">
+              esperando receber · {commitmentsByType('expect').length}
+            </div>
+            <div class="space-y-1">
+              {#each expectingPreview() as c (c.id)}
+                {@const sticker = lookupSticker(c.code)}
+                <div class="flex items-center gap-2 py-1">
+                  <div class="mono text-[11px] text-pitch-400 min-w-[60px]">{sticker ? formatStickerLabel(sticker) : c.code}</div>
+                  <div class="flex-1 text-xs text-ink-200 truncate">de {c.person}</div>
+                  <button class="btn btn-ghost !py-1 !px-2 text-[10px]" onclick={() => fulfillExpect(c.id)} type="button">recebi</button>
+                </div>
+              {/each}
+              {#if commitmentsByType('expect').length > 3}
+                <a href="#dups" class="block text-[11px] text-ink-300 text-center pt-1">+ {commitmentsByType('expect').length - 3} mais</a>
+              {/if}
+            </div>
+          </div>
+        {/if}
+        {#if givingPreview().length > 0}
+          <div class="card p-3">
+            <div class="text-[10px] uppercase tracking-[0.18em] text-flag-400 mb-1.5">
+              prometidas pra entregar · {commitmentsByType('give').length}
+            </div>
+            <div class="space-y-1">
+              {#each givingPreview() as c (c.id)}
+                {@const sticker = lookupSticker(c.code)}
+                <div class="flex items-center gap-2 py-1">
+                  <div class="mono text-[11px] text-flag-400 min-w-[60px]">{sticker ? formatStickerLabel(sticker) : c.code}</div>
+                  <div class="flex-1 text-xs text-ink-200 truncate">pra {c.person}</div>
+                  <button class="btn btn-ghost !py-1 !px-2 text-[10px]" onclick={() => fulfillGive(c.id)} type="button">entreguei</button>
+                </div>
+              {/each}
+              {#if commitmentsByType('give').length > 3}
+                <a href="#dups" class="block text-[11px] text-ink-300 text-center pt-1">+ {commitmentsByType('give').length - 3} mais</a>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
+  <!-- Atividade recente -->
+  {#if recentLogs().length > 0}
+    <div class="px-5 mt-4">
+      <div class="flex items-end justify-between mb-2">
+        <div>
+          <div class="text-[10px] uppercase tracking-[0.22em] text-ink-300">Atividade</div>
+          <h2 class="display text-base font-semibold text-white leading-none mt-1">Recente</h2>
+        </div>
+        <a href="#logs" class="text-[11px] text-ink-300 underline">ver tudo</a>
+      </div>
+      <div class="card divide-y divide-white/5">
+        {#each recentLogs() as log (log.id)}
+          <div class="flex items-center gap-2 p-2.5">
+            <div class="text-xs text-ink-200 flex-1 truncate">{logSummary(log)}</div>
+            <span class="text-[10px] text-ink-400 mono shrink-0">{logTime(log.ts)}</span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
   <!-- Money grid -->
   <div class="px-5 mt-4 grid grid-cols-2 gap-3">
