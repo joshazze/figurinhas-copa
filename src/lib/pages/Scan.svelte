@@ -11,7 +11,7 @@
 
   // Versao bumpada a cada deploy do Scan/OCR pra confirmar que o cache do PWA
   // pegou o build novo. Visivel no header da aba.
-  const SCAN_VERSION = '2.1.4';
+  const SCAN_VERSION = '2.1.5';
 
   // Pre-warm engine quando user abre a aba
   $effect(() => {
@@ -107,9 +107,8 @@
         sticker: m.sticker,
         votes: m.votes || 1,
         passes: m.passes || [],
-        // confirma automaticamente se aparece em 2+ passes (alta confianca);
-        // 1 pass desmarcado pra forcar revisao humana
-        confirmed: (m.votes || 1) >= 2,
+        // 8 fontes (7 Paddle + Tesseract). 3+ = auto-confirma, 1-2 = revisa.
+        confirmed: (m.votes || 1) >= 3,
         variant: 'album'
       }));
       stage = 'review';
@@ -370,15 +369,17 @@
               </div>
               <div class="shrink-0 flex flex-col items-end gap-0.5">
                 <span class="text-[10px] mono
-                             {d.votes >= 3 ? 'text-pitch-400' : d.votes === 2 ? 'text-gold-400' : 'text-ink-400'}">
-                  {d.votes}/4
+                             {d.votes >= 5 ? 'text-pitch-400' : d.votes >= 3 ? 'text-gold-400' : 'text-ink-400'}">
+                  {d.votes}/8
                 </span>
-                {#if d.votes >= 3}
-                  <span class="text-[9px] text-pitch-400 uppercase">alta</span>
+                {#if d.votes >= 5}
+                  <span class="text-[9px] text-pitch-400 uppercase">certo</span>
+                {:else if d.votes >= 3}
+                  <span class="text-[9px] text-gold-400 uppercase">alta</span>
                 {:else if d.votes === 2}
-                  <span class="text-[9px] text-gold-400 uppercase">média</span>
+                  <span class="text-[9px] text-ink-300 uppercase">média</span>
                 {:else}
-                  <span class="text-[9px] text-ink-400 uppercase">baixa</span>
+                  <span class="text-[9px] text-ink-400 uppercase">revisar</span>
                 {/if}
               </div>
               <button class="text-ink-400 px-2 text-xs" onclick={() => removeDetected(d.id)} type="button" aria-label="remover">✕</button>
