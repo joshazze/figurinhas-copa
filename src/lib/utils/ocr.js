@@ -3,8 +3,19 @@
 // Agora: erro do Paddle SOBE pra UI mostrar pro user; debug info exposto.
 
 const TESSERACT_URL = 'https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js';
-const MAX_DIM = 2000;      // mantem detalhe legivel sem encher RAM no iPhone
-const THUMB_DIM = 900;     // canvas separado pequeno pra preview na review
+const MAX_DIM = 1500;      // iPhone Safari mata PWA acima de ~250MB residente.
+                            // 1500px = canvas ~12MB. Com 6 passes sequenciais
+                            // + breathing room agressivo o pico fica controlado.
+const THUMB_DIM = 800;
+
+// Helper: pausa entre passes pra Safari rodar GC e devolver memoria.
+// Combina setTimeout + N animation frames (forca repaint cycle).
+async function breathe(ms = 400) {
+  await new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 3; i++) {
+    await new Promise((r) => requestAnimationFrame(() => r()));
+  }
+}
 
 let paddlePromise = null;
 let tessLoadPromise = null;
@@ -144,20 +155,17 @@ export async function ocrPaddle(file, onUpdate) {
   const ocr = await loadPaddle((phase) => update(phase));
   debug.timings.load = Date.now() - tLoad;
 
-  // 7 passes Paddle cobrindo todas as orientacoes + niveis de contraste.
-  // + 1 pass Tesseract no final como "segunda opiniao" de engine diferente.
-  // Total 8 fontes -> codigo em 3+ = alta confianca; 2 = media; 1 = baixa.
+  // 6 passes sequenciais com BREATHING ROOM agressivo entre cada pra Safari
+  // rodar GC e devolver memoria do ONNX inference anterior. Nada em paralelo.
   const passes = [
-    { name: '0°',           rotate: 0,   filter: null },
-    { name: '90°',          rotate: 90,  filter: null },
-    { name: '180°',         rotate: 180, filter: null },
-    { name: '270°',         rotate: 270, filter: null },
-    { name: '0°+contr',     rotate: 0,   filter: 'contrast(1.4) saturate(0.3) brightness(1.05)' },
-    { name: '90°+contr',    rotate: 90,  filter: 'contrast(1.4) saturate(0.3) brightness(1.05)' },
-    { name: '0°+grayHi',    rotate: 0,   filter: 'grayscale(1) contrast(1.8) brightness(1.1)' }
+    { name: '0°',         rotate: 0,   filter: null },
+    { name: '90°',        rotate: 90,  filter: null },
+    { name: '180°',       rotate: 180, filter: null },
+    { name: '270°',       rotate: 270, filter: null },
+    { name: '0°+contr',   rotate: 0,   filter: 'contrast(1.4) saturate(0.3) brightness(1.05)' },
+    { name: '90°+contr',  rotate: 90,  filter: 'contrast(1.4) saturate(0.3) brightness(1.05)' }
   ];
 
-  // Confidence minimo do PaddleOCR (cada linha vem com .score 0-1).
   const MIN_SCORE = 0.55;
 
   // Thumb pequeno pra preview da review — gerado ANTES dos passes pra poder
@@ -216,34 +224,10 @@ export async function ocrPaddle(file, onUpdate) {
       for (const l of filtered) allLines.push({ ...l, pass: p.name });
     }
 
-    // pausa breve permite o navegador respirar/coletar lixo entre passes
-    await new Promise((r) => setTimeout(r, 50));
-  }
-
-  // 8º pass: Tesseract como segunda opiniao de engine diferente.
-  // Codigos achados por AMBOS engines tem confianca maxima.
-  try {
-    const tTess = Date.now();
-    const T = await loadTesseract();
-    const tessCanvas = imageToCanvas(img, 0);
-    const { data } = await T.recognize(tessCanvas, 'eng', {
-      tessedit_pageseg_mode: '11'
-    });
-    tessCanvas.width = 0; tessCanvas.height = 0;
-    const tessText = data?.text || '';
-    if (tessText) {
-      // simulamos uma "linha" Tesseract por linha de texto retornada
-      for (const t of tessText.split('\n').map((s) => s.trim()).filter(Boolean)) {
-        allLines.push({ text: t, pass: 'tesseract' });
-      }
-    }
-    debug.passes.push({
-      pass: 'tesseract',
-      lines: tessText.split('\n').filter((s) => s.trim()).length,
-      ms: Date.now() - tTess
-    });
-  } catch (e) {
-    debug.passes.push({ pass: 'tesseract', lines: 0, err: e?.message || String(e) });
+    // BREATHING ROOM: 400ms + 3 rAF cycles entre cada pass pra Safari
+    // rodar GC. Sem isso, a memoria do ONNX inference anterior acumula
+    // e iPhone mata o PWA (white-screen-reload).
+    if (i < passes.length - 1) await breathe(400);
   }
 
   debug.timings.detect = Date.now() - tDetect;
@@ -254,8 +238,8 @@ export async function ocrPaddle(file, onUpdate) {
 
   return {
     text,
-    lines: allLines,        // pra multi-pass voting no codeMatch
-    engine: 'paddleocr+tesseract',
+    lines: allLines,
+    engine: 'paddleocr',
     dataUrl: thumbDataUrl,
     debug
   };
