@@ -2,11 +2,20 @@
 // Antes: catch silencioso engolia erros e caia pro Tesseract sem avisar.
 // Agora: erro do Paddle SOBE pra UI mostrar pro user; debug info exposto.
 
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+// Plugin nativo Vision Framework (apenas iOS Capacitor)
+const VisionOCR = registerPlugin('VisionOCR');
+
 const TESSERACT_URL = 'https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js';
 const MAX_DIM = 1500;      // iPhone Safari mata PWA acima de ~250MB residente.
                             // 1500px = canvas ~12MB. Com 6 passes sequenciais
                             // + breathing room agressivo o pico fica controlado.
 const THUMB_DIM = 800;
+
+export function isNative() {
+  return Capacitor.isNativePlatform();
+}
 
 // Helper: pausa entre passes pra Safari rodar GC e devolver memoria.
 // Combina setTimeout + N animation frames (forca repaint cycle).
@@ -274,6 +283,65 @@ export async function ocrTesseract(file, onUpdate) {
   };
 }
 
+// Vision Framework nativo (Capacitor iOS). Roda no Neural Engine,
+// nenhum download de modelo, ~0.3-1s por foto, 95%+ acuracia.
+export async function ocrVisionNative(file, onUpdate) {
+  const update = (phase, percent) => onUpdate?.({ phase, percent });
+  const debug = { engine: 'vision', timings: {} };
+
+  update('prepare', 30);
+  const t0 = Date.now();
+  const img = await fileToImage(file);
+  const canvas = imageToCanvas(img, 0);
+  debug.imgSize = { w: img.naturalWidth, h: img.naturalHeight };
+  debug.canvasSize = { w: canvas.width, h: canvas.height };
+
+  // Vision roda no plugin nativo, recebe base64
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  // libera o canvas — base64 ja tem os bytes
+  canvas.width = 0; canvas.height = 0;
+  debug.timings.prepare = Date.now() - t0;
+
+  update('ocr', 20);
+  const t1 = Date.now();
+  const result = await VisionOCR.recognize({ imageData: dataUrl });
+  debug.timings.recognize = Date.now() - t1;
+  debug.totalLines = result?.lines?.length || 0;
+  update('ocr', 100);
+
+  // Gera thumb pequeno pra preview da review
+  const thumb = imageToCanvas(img, 0);
+  const tscale = Math.min(1, THUMB_DIM / Math.max(thumb.width, thumb.height));
+  const tc = document.createElement('canvas');
+  tc.width = Math.round(thumb.width * tscale);
+  tc.height = Math.round(thumb.height * tscale);
+  tc.getContext('2d').drawImage(thumb, 0, 0, tc.width, tc.height);
+  const thumbDataUrl = tc.toDataURL('image/jpeg', 0.78);
+  thumb.width = 0; thumb.height = 0;
+  tc.width = 0; tc.height = 0;
+
+  return {
+    text: result?.text || '',
+    lines: result?.lines || [],
+    engine: 'vision',
+    dataUrl: thumbDataUrl,
+    debug
+  };
+}
+
+// Wrapper inteligente: usa Vision se estiver no app nativo (Capacitor iOS),
+// senao Paddle. Tesseract fica como fallback manual.
+export async function ocrAuto(file, onUpdate) {
+  if (isNative()) {
+    return ocrVisionNative(file, onUpdate);
+  }
+  return ocrPaddle(file, onUpdate);
+}
+
 export function ocrAvailability() {
-  return { paddle: true, fallback: 'tesseract.js' };
+  return {
+    native: isNative(),
+    primary: isNative() ? 'vision' : 'paddleocr',
+    fallback: 'tesseract.js'
+  };
 }

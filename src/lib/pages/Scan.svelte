@@ -1,6 +1,6 @@
 <script>
   import Header from '../components/Header.svelte';
-  import { ocrPaddle, ocrTesseract, prewarmPaddleOCR } from '../utils/ocr.js';
+  import { ocrAuto, ocrTesseract, ocrPaddle, prewarmPaddleOCR, isNative } from '../utils/ocr.js';
   import { matchAll, matchAllWithPasses } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
   import {
@@ -11,11 +11,12 @@
 
   // Versao bumpada a cada deploy do Scan/OCR pra confirmar que o cache do PWA
   // pegou o build novo. Visivel no header da aba.
-  const SCAN_VERSION = '2.1.6';
+  const SCAN_VERSION = isNative() ? '3.0.0-native' : '2.1.6';
 
-  // Pre-warm engine quando user abre a aba
+  // Pre-warm engine PaddleOCR quando user abre a aba — so faz sentido no PWA.
+  // No app nativo, Vision Framework ja vem carregado no iOS.
   $effect(() => {
-    prewarmPaddleOCR();
+    if (!isNative()) prewarmPaddleOCR();
   });
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
@@ -72,7 +73,7 @@
     if (imageUrl && imageUrl.startsWith('blob:')) URL.revokeObjectURL(imageUrl);
     imageUrl = URL.createObjectURL(file);
     lastFile = file;
-    await runOCR(file, 'paddle');
+    await runOCR(file, 'auto');     // auto = Vision se nativo, Paddle se PWA
     e.target.value = '';
   }
 
@@ -83,7 +84,9 @@
     errorMsg = '';
     ocrDebug = null;
     try {
-      const fn = engine === 'tesseract' ? ocrTesseract : ocrPaddle;
+      const fn = engine === 'tesseract' ? ocrTesseract
+               : engine === 'paddle'    ? ocrPaddle
+               : ocrAuto;
       const result = await fn(file, ({ phase: ph, percent }) => {
         phase = ph;
         phasePercent = percent ?? null;
@@ -273,7 +276,7 @@
         </label>
 
         <div class="mt-4 text-[10px] uppercase tracking-[0.18em] text-ink-400">
-          engine: PaddleOCR (alta precisão)
+          engine: {isNative() ? 'Vision Framework (nativo iOS)' : 'PaddleOCR (web)'}
         </div>
       </div>
 

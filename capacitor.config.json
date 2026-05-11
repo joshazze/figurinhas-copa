@@ -1,0 +1,12 @@
+{
+  "appId": "com.joshazze.figurinhascopa",
+  "appName": "Figurinhas Copa",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}
