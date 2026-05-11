@@ -144,13 +144,21 @@ export async function ocrPaddle(file, onUpdate) {
   const ocr = await loadPaddle((phase) => update(phase));
   debug.timings.load = Date.now() - tLoad;
 
-  // Define os passes
+  // 7 passes Paddle cobrindo todas as orientacoes + niveis de contraste.
+  // + 1 pass Tesseract no final como "segunda opiniao" de engine diferente.
+  // Total 8 fontes -> codigo em 3+ = alta confianca; 2 = media; 1 = baixa.
   const passes = [
-    { name: '0°', rotate: 0, filter: null },
-    { name: '90°', rotate: 90, filter: null },
-    { name: '0°+contr', rotate: 0, filter: 'contrast(1.35) saturate(0.5) brightness(1.05)' },
-    { name: '90°+contr', rotate: 90, filter: 'contrast(1.35) saturate(0.5) brightness(1.05)' }
+    { name: '0°',           rotate: 0,   filter: null },
+    { name: '90°',          rotate: 90,  filter: null },
+    { name: '180°',         rotate: 180, filter: null },
+    { name: '270°',         rotate: 270, filter: null },
+    { name: '0°+contr',     rotate: 0,   filter: 'contrast(1.4) saturate(0.3) brightness(1.05)' },
+    { name: '90°+contr',    rotate: 90,  filter: 'contrast(1.4) saturate(0.3) brightness(1.05)' },
+    { name: '0°+grayHi',    rotate: 0,   filter: 'grayscale(1) contrast(1.8) brightness(1.1)' }
   ];
+
+  // Confidence minimo do PaddleOCR (cada linha vem com .score 0-1).
+  const MIN_SCORE = 0.55;
 
   // Thumb pequeno pra preview da review — gerado ANTES dos passes pra poder
   // liberar a img full-res caso necessario.
@@ -195,18 +203,47 @@ export async function ocrPaddle(file, onUpdate) {
       url = null;
     }
 
+    // Filtra linhas de baixa confidence do proprio Paddle
+    const filtered = (lines || []).filter((l) => (l.score == null) || l.score >= MIN_SCORE);
     debug.passes.push({
       pass: p.name,
-      lines: lines?.length || 0,
+      lines: filtered.length,
+      rawLines: lines?.length || 0,
       ms: Date.now() - tPass,
       err
     });
-    if (lines?.length > 0) {
-      for (const l of lines) allLines.push({ ...l, pass: p.name });
+    if (filtered.length > 0) {
+      for (const l of filtered) allLines.push({ ...l, pass: p.name });
     }
 
     // pausa breve permite o navegador respirar/coletar lixo entre passes
     await new Promise((r) => setTimeout(r, 50));
+  }
+
+  // 8º pass: Tesseract como segunda opiniao de engine diferente.
+  // Codigos achados por AMBOS engines tem confianca maxima.
+  try {
+    const tTess = Date.now();
+    const T = await loadTesseract();
+    const tessCanvas = imageToCanvas(img, 0);
+    const { data } = await T.recognize(tessCanvas, 'eng', {
+      tessedit_pageseg_mode: '11'
+    });
+    tessCanvas.width = 0; tessCanvas.height = 0;
+    const tessText = data?.text || '';
+    if (tessText) {
+      // simulamos uma "linha" Tesseract por linha de texto retornada
+      for (const t of tessText.split('\n').map((s) => s.trim()).filter(Boolean)) {
+        allLines.push({ text: t, pass: 'tesseract' });
+      }
+    }
+    debug.passes.push({
+      pass: 'tesseract',
+      lines: tessText.split('\n').filter((s) => s.trim()).length,
+      ms: Date.now() - tTess
+    });
+  } catch (e) {
+    debug.passes.push({ pass: 'tesseract', lines: 0, err: e?.message || String(e) });
   }
 
   debug.timings.detect = Date.now() - tDetect;
@@ -218,7 +255,7 @@ export async function ocrPaddle(file, onUpdate) {
   return {
     text,
     lines: allLines,        // pra multi-pass voting no codeMatch
-    engine: 'paddleocr',
+    engine: 'paddleocr+tesseract',
     dataUrl: thumbDataUrl,
     debug
   };
