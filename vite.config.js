@@ -7,6 +7,20 @@ const isPages = process.env.GITHUB_PAGES === 'true';
 
 export default defineConfig({
   base: isPages ? `/${repoName}/` : '/',
+  build: {
+    rollupOptions: {
+      output: {
+        // Isola OCR (onnxruntime + paddle) num chunk com nome reconhecivel
+        manualChunks(id) {
+          if (id.includes('onnxruntime') || id.includes('gutenye/ocr')) return 'ocr-engine';
+        },
+        chunkFileNames(chunk) {
+          if (chunk.name === 'ocr-engine') return 'assets/ocr-engine-[hash].js';
+          return 'assets/[name]-[hash].js';
+        }
+      }
+    }
+  },
   plugins: [
     svelte(),
     VitePWA({
@@ -31,7 +45,38 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}']
+        // Cache em runtime pros binarios grandes (ORT wasm 26MB, OCR chunk 10MB).
+        // Eles so sao baixados quando o user abre o Scan e ficam cacheados.
+        globPatterns: ['**/*.{css,html,svg,png,ico,webmanifest}'],
+        // Exclui chunks grandes do PWA precache (carregam por demanda)
+        globIgnores: ['**/ort-*.{js,wasm}', '**/onnxruntime*', '**/ocr-engine-*.js'],
+        maximumFileSizeToCacheInBytes: 500 * 1024,    // 500KB pra precache estrito
+        // Permite que o build prossiga mesmo com chunks grandes
+        // (eles aparecem no manifest pra runtime cache pegar)
+        dontCacheBustURLsMatching: /\.(?:wasm|onnx)$/,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.endsWith('.wasm') || url.pathname.endsWith('.onnx'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'ocr-binaries',
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'cdn-ocr',
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/unpkg\.com\//,
+            handler: 'CacheFirst',
+            options: { cacheName: 'unpkg-cdn' }
+          }
+        ]
       }
     })
   ]
