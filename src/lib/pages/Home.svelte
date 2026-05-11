@@ -115,30 +115,36 @@
     </div>
   </div>
 
-  <!-- Faltam pra fechar: times mais perto -->
+  <!-- Seleções que faltam menos (próximas de fechar) -->
   {#if closingSoon().length > 0}
-    <div class="mt-4">
+    <div class="mt-5">
       <div class="px-5 flex items-end justify-between gap-2 mb-2 min-w-0">
-        <div class="min-w-0 flex-1">
-          <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300 truncate">Quase fechando</div>
-          <h2 class="display text-base font-semibold text-white leading-none mt-1 truncate">Times mais perto</h2>
-        </div>
+        <h2 class="display text-base font-semibold text-white leading-none truncate flex-1 min-w-0">
+          Seleções que faltam menos
+        </h2>
         <a href="#album" class="text-[11px] text-ink-300 underline shrink-0">ver álbum</a>
       </div>
-      <div class="scrollx flex gap-2 overflow-x-auto px-5 pb-1">
+      <div class="scrollx flex gap-2 overflow-x-auto px-5 pb-2 -mr-0">
         {#each closingSoon() as t (t.team)}
-          <a href={`#album`} class="shrink-0 w-[140px] rounded-2xl bg-white/[0.04] border border-white/10
-                                    p-3 hover:bg-white/[0.07] transition tricolor-bar relative overflow-hidden">
-            <div class="display text-xl font-bold text-white leading-none">{t.team}</div>
-            <div class="text-[10px] text-ink-300 mt-1 truncate">{t.section}</div>
-            <div class="mt-2 flex items-baseline gap-1">
-              <span class="num text-2xl text-gold-400 leading-none">{t.missing}</span>
-              <span class="text-[10px] uppercase tracking-wide text-ink-400">faltam</span>
+          <a href={`#album`}
+             class="shrink-0 w-[120px] rounded-2xl bg-white/[0.04] border border-white/10
+                    p-3 hover:bg-white/[0.07] transition flex flex-col">
+            <!-- Header: codigo + nome -->
+            <div class="display text-2xl font-bold text-white leading-none">{t.team}</div>
+            <div class="text-[10px] text-ink-400 mt-0.5 truncate">{t.section}</div>
+
+            <!-- Big number central -->
+            <div class="mt-3 flex items-baseline gap-1">
+              <span class="num text-3xl text-gold-400 leading-none">{t.missing}</span>
+              <span class="text-[10px] uppercase tracking-wide text-ink-400">restam</span>
             </div>
-            <div class="mt-2 h-1 rounded-full bg-white/10 overflow-hidden">
+
+            <!-- Progress bar fina -->
+            <div class="mt-2 h-[3px] rounded-full bg-white/10 overflow-hidden">
               <div class="h-full bg-gradient-to-r from-pitch-400 to-gold-400"
                    style="width: {t.pct.toFixed(0)}%"></div>
             </div>
+            <div class="text-[9px] text-ink-400 mt-1 mono">{t.pct.toFixed(0)}% colado</div>
           </a>
         {/each}
       </div>
