@@ -14,10 +14,17 @@
       : '';
 
   let cost = $state(defaultCostStr());
+  let costMode = $state('unit');           // 'unit' = preco por pacote · 'lot' = preco total do lote
   let count = $state('');
   let qty = $state('1');
   let source = $state('mc');
   let date = $state(new Date().toISOString().slice(0, 10));
+
+  const parsedCost = $derived(() => parseFloat(String(cost).replace(',', '.')) || 0);
+  const parsedQty = $derived(() => Math.max(1, parseInt(qty) || 1));
+  // Custo por pacote efetivamente (divide o lote se for modo 'lot')
+  const unitCost = $derived(() => costMode === 'lot' ? parsedCost() / parsedQty() : parsedCost());
+  const totalCost = $derived(() => costMode === 'lot' ? parsedCost() : parsedCost() * parsedQty());
 
   const fmt = (n) => `${appState.settings.currency} ${(n||0).toFixed(2).replace('.', ',')}`;
 
@@ -35,14 +42,17 @@
 
   function submit(e) {
     e.preventDefault();
-    const c = parseFloat(String(cost).replace(',', '.'));
-    if (!isFinite(c) || c < 0) return;
+    const raw = parseFloat(String(cost).replace(',', '.'));
+    if (!isFinite(raw) || raw < 0) return;
     const n = parseInt(count) || defaultStickersForSource(source);
     const q = Math.max(1, parseInt(qty) || 1);
-    addPack({ cost: c, count: n, qty: q, source, date: new Date(date).toISOString() });
+    // Sempre armazena custo unitário pra ficar consistente com a derivada totalSpent
+    const unit = costMode === 'lot' ? raw / q : raw;
+    addPack({ cost: unit, count: n, qty: q, source, date: new Date(date).toISOString() });
     cost = defaultCostStr();
     count = '';
     qty = '1';
+    costMode = 'unit';
   }
 
   function fmtDate(iso) {
@@ -86,8 +96,23 @@
       </div>
       <div class="mt-3 grid grid-cols-2 gap-3">
         <label class="block">
-          <div class="text-xs text-ink-300 mb-1">Custo unit. ({appState.settings.currency})</div>
-          <input bind:value={cost} class="input mono" inputmode="decimal" placeholder="6,00" required />
+          <div class="flex items-center justify-between text-xs text-ink-300 mb-1">
+            <span>Preço ({appState.settings.currency})</span>
+            <div class="flex gap-1 text-[10px] uppercase tracking-wide">
+              <button type="button"
+                      onclick={() => costMode = 'unit'}
+                      class="px-1.5 py-0.5 rounded {costMode === 'unit' ? 'bg-flag-400/20 text-flag-400' : 'text-ink-400 hover:text-ink-200'}">
+                por pacote
+              </button>
+              <button type="button"
+                      onclick={() => costMode = 'lot'}
+                      class="px-1.5 py-0.5 rounded {costMode === 'lot' ? 'bg-flag-400/20 text-flag-400' : 'text-ink-400 hover:text-ink-200'}">
+                lote todo
+              </button>
+            </div>
+          </div>
+          <input bind:value={cost} class="input mono" inputmode="decimal"
+                 placeholder={costMode === 'lot' ? '30,00 (todos)' : '6,00 (cada)'} required />
         </label>
         <label class="block">
           <div class="text-xs text-ink-300 mb-1">Figurinhas/pacote</div>
@@ -102,10 +127,16 @@
           <input bind:value={date} type="date" class="input mono" />
         </label>
       </div>
-      {#if (parseInt(qty) || 1) > 1 && parseFloat(String(cost).replace(',', '.')) > 0}
+      {#if parsedCost() > 0}
         <div class="mt-3 text-xs text-ink-300">
-          total: <span class="text-lime-400 num">{fmt((parseFloat(String(cost).replace(',', '.')) || 0) * (parseInt(qty) || 1))}</span>
-          · <span class="text-white num">{effectiveCount * (parseInt(qty) || 1)}</span> figurinhas
+          {#if parsedQty() > 1}
+            total: <span class="text-lime-400 num">{fmt(totalCost())}</span>
+            · {fmt(unitCost())} por pacote
+            · <span class="text-white num">{effectiveCount * parsedQty()}</span> figurinhas
+          {:else}
+            <span class="text-lime-400 num">{fmt(totalCost())}</span>
+            · {effectiveCount} figurinhas
+          {/if}
         </div>
       {/if}
       <button type="submit" class="btn btn-primary w-full mt-3">
