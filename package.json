@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.3",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
@@ -20,6 +21,8 @@
     "vite-plugin-pwa": "^0.21.0"
   },
   "dependencies": {
+    "@capacitor/core": "^8.3.3",
+    "@capacitor/ios": "^8.3.3",
     "@gutenye/ocr-browser": "^1.4.8"
   }
 }

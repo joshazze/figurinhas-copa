@@ -143,8 +143,8 @@
   // --- Share: formato pedido pelo Josh, espelhando o exemplo da galera ---
   function shareList() {
     const lines = [];
-    lines.push('🏆 Figurinhas Copa 2026');
-    lines.push('🇺🇸 🇨🇦 🇲🇽 · Somos 26');
+    lines.push('🏆 Figs · Copa 2026');
+    lines.push('🇺🇸 🇨🇦 🇲🇽');
     lines.push('');
     lines.push('Repetidas:');
 

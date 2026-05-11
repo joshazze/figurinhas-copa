@@ -102,7 +102,7 @@
         <span class="flag-mini flag-mx"></span>
       </div>
       <div class="display tracking-[0.3em] text-ink-300">FIFA WORLD CUP 2026</div>
-      <div>Figurinhas Copa 2026 · funciona offline</div>
+      <div>Figs · Cromos da Copa 2026 · funciona offline</div>
     </div>
   </div>
 </section>

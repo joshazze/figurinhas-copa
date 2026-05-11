@@ -13,7 +13,7 @@
         </span>
         <span class="text-ink-400">·</span>
       {/if}
-      <span>{sub || 'Copa 2026'}</span>
+      <span>{sub || 'Figs · Copa 2026'}</span>
     </div>
     <h1 class="display text-3xl font-bold text-white mt-1 leading-none">{title}</h1>
   </div>

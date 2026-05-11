@@ -1,0 +1,12 @@
+{
+  "appId": "com.joshazze.figs",
+  "appName": "Figs",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}

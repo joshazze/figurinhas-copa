@@ -1,25 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%"  stop-color="#0a1330"/>
       <stop offset="100%" stop-color="#050b1f"/>
     </linearGradient>
-    <linearGradient id="g26" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%"  stop-color="#fde68a"/>
       <stop offset="55%" stop-color="#fbbf24"/>
       <stop offset="100%" stop-color="#b45309"/>
     </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0%"  stop-color="rgba(251,191,36,0.4)"/>
+      <stop offset="100%" stop-color="rgba(251,191,36,0)"/>
+    </radialGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <!-- Faixa tricolor (USA azul / vermelho / México verde) -->
-  <rect x="0"  y="0" width="22" height="4" fill="#1d4ed8"/>
-  <rect x="22" y="0" width="20" height="4" fill="#dc2626"/>
-  <rect x="42" y="0" width="22" height="4" fill="#16a34a"/>
-  <!-- Número 26 dourado central -->
-  <text x="32" y="46" text-anchor="middle"
+
+  <!-- BG -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- Faixa tricolor vertical na esquerda (broadcast accent) -->
+  <rect x="48" y="120" width="6" height="100" fill="#1d4ed8"/>
+  <rect x="48" y="220" width="6" height="100" fill="#dc2626"/>
+  <rect x="48" y="320" width="6" height="80"  fill="#16a34a"/>
+
+  <!-- Glow dourado atrás do F -->
+  <circle cx="280" cy="270" r="180" fill="url(#glow)"/>
+
+  <!-- Letra F gigante dourada (Bebas-style geometrica) -->
+  <g fill="url(#gold)">
+    <!-- Haste vertical -->
+    <rect x="160" y="120" width="80" height="280"/>
+    <!-- Barra superior -->
+    <rect x="160" y="120" width="220" height="60"/>
+    <!-- Barra do meio -->
+    <rect x="160" y="220" width="170" height="50"/>
+  </g>
+
+  <!-- Microdetalhe "26" no canto inferior direito (subtle) -->
+  <text x="430" y="450" text-anchor="end"
         font-family="'Bebas Neue','Space Grotesk',system-ui,sans-serif"
-        font-size="38" font-weight="900" fill="url(#g26)" letter-spacing="-1">26</text>
-  <!-- Estrela dourada -->
-  <path d="M52 52 l1.6 3.4 3.7.4 -2.8 2.5 .8 3.7 -3.3 -1.9 -3.3 1.9 .8 -3.7 -2.8 -2.5 3.7 -.4 z"
-        fill="#fbbf24" opacity="0.9"/>
+        font-size="42" font-weight="700" fill="rgba(251,191,36,0.6)" letter-spacing="2">26</text>
 </svg>

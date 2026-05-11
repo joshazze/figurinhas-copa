@@ -1,6 +1,6 @@
 <script>
   import Header from '../components/Header.svelte';
-  import { ocrPaddle, ocrTesseract, prewarmPaddleOCR } from '../utils/ocr.js';
+  import { ocrAuto, ocrTesseract, ocrPaddle, prewarmPaddleOCR, isNative } from '../utils/ocr.js';
   import { matchAll, matchAllWithPasses } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
   import {
@@ -11,11 +11,12 @@
 
   // Versao bumpada a cada deploy do Scan/OCR pra confirmar que o cache do PWA
   // pegou o build novo. Visivel no header da aba.
-  const SCAN_VERSION = '2.1.6';
+  const SCAN_VERSION = isNative() ? '3.1.0-native' : '2.1.6';
 
-  // Pre-warm engine quando user abre a aba
+  // Pre-warm engine PaddleOCR quando user abre a aba — so faz sentido no PWA.
+  // No app nativo, Vision Framework ja vem carregado no iOS.
   $effect(() => {
-    prewarmPaddleOCR();
+    if (!isNative()) prewarmPaddleOCR();
   });
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
@@ -72,7 +73,7 @@
     if (imageUrl && imageUrl.startsWith('blob:')) URL.revokeObjectURL(imageUrl);
     imageUrl = URL.createObjectURL(file);
     lastFile = file;
-    await runOCR(file, 'paddle');
+    await runOCR(file, 'auto');     // auto = Vision se nativo, Paddle se PWA
     e.target.value = '';
   }
 
@@ -83,7 +84,9 @@
     errorMsg = '';
     ocrDebug = null;
     try {
-      const fn = engine === 'tesseract' ? ocrTesseract : ocrPaddle;
+      const fn = engine === 'tesseract' ? ocrTesseract
+               : engine === 'paddle'    ? ocrPaddle
+               : ocrAuto;
       const result = await fn(file, ({ phase: ph, percent }) => {
         phase = ph;
         phasePercent = percent ?? null;
@@ -172,11 +175,10 @@
     stage = 'applying';
 
     if (destination === 'pack') {
-      const count = codes.length || defaultStickersForSource(packSource);
-      const cost = packCostMode === 'lot' ? (Number(packCost) || 0) : (Number(packCost) || 0);
-      // se modo unit, multiplicamos por qty (qty = 1 aqui); se lot, ja e total
-      const finalCost = packCostMode === 'lot' ? cost : cost;
-      addPack({ cost: finalCost, count, source: packSource, qty: 1 });
+      // Veio de pacote: simplesmente registra as figurinhas. Ineditas viram
+      // coleção, ja conhecidas viram repetidas (vao pro bolo).
+      // O cadastro de pacote em si (preco, qtd) fica na aba Pacotes — Scan
+      // so registra as figurinhas.
       for (const code of codes) addSticker(code, 1);
     } else if (destination === 'received') {
       for (const code of codes) {
@@ -273,7 +275,7 @@
         </label>
 
         <div class="mt-4 text-[10px] uppercase tracking-[0.18em] text-ink-400">
-          engine: PaddleOCR (alta precisão)
+          engine: {isNative() ? 'Vision Framework (nativo iOS)' : 'PaddleOCR (web)'}
         </div>
       </div>
 
@@ -369,13 +371,15 @@
               </div>
               <div class="shrink-0 flex flex-col items-end gap-0.5">
                 <span class="text-[10px] mono
-                             {d.votes >= 4 ? 'text-pitch-400' : d.votes >= 2 ? 'text-gold-400' : 'text-ink-400'}">
-                  {d.votes}/6
+                             {d.votes >= 6 ? 'text-pitch-400' : d.votes >= 3 ? 'text-gold-400' : 'text-ink-400'}">
+                  {d.votes}×
                 </span>
-                {#if d.votes >= 4}
+                {#if d.votes >= 6}
                   <span class="text-[9px] text-pitch-400 uppercase">certo</span>
-                {:else if d.votes >= 2}
+                {:else if d.votes >= 3}
                   <span class="text-[9px] text-gold-400 uppercase">alta</span>
+                {:else if d.votes === 2}
+                  <span class="text-[9px] text-ink-300 uppercase">média</span>
                 {:else}
                   <span class="text-[9px] text-ink-400 uppercase">revisar</span>
                 {/if}
@@ -431,7 +435,7 @@
                                        {destination === 'pack' ? 'ring-2 ring-pitch-400' : ''}"
                   onclick={() => destination = 'pack'}>
             <div class="font-semibold text-white">📦 Vieram do pacote</div>
-            <div class="text-xs text-ink-300 mt-0.5">Registra um pacote novo e marca todas</div>
+            <div class="text-xs text-ink-300 mt-0.5">Registra cada figurinha: inéditas vão pro álbum, conhecidas vão pro bolo de repetidas</div>
           </button>
           <button type="button" class="w-full text-left card p-4 hover:bg-white/[0.06] transition
                                        {destination === 'received' ? 'ring-2 ring-pitch-400' : ''}"
@@ -454,38 +458,7 @@
       </div>
 
       <!-- Detalhes do destino selecionado -->
-      {#if destination === 'pack'}
-        <div class="card p-4 space-y-3">
-          <div class="text-[10px] uppercase tracking-[0.18em] text-ink-300">detalhes do pacote</div>
-          <div class="flex gap-2">
-            {#each PACK_SOURCES as src}
-              <button type="button"
-                      class="flex-1 btn !py-2 text-xs {packSource === src ? 'btn-primary' : 'btn-ghost'}"
-                      onclick={() => packSource = src}>
-                {src === 'mc' ? '🍔 mc (5)' : '🏪 banca (7)'}
-              </button>
-            {/each}
-          </div>
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="text-xs text-ink-300">Preço ({appState.settings.currency})</label>
-              <div class="flex gap-1 text-[10px] uppercase tracking-wide">
-                <button type="button"
-                        onclick={() => packCostMode = 'unit'}
-                        class="px-1.5 py-0.5 rounded {packCostMode === 'unit' ? 'bg-flag-400/20 text-flag-400' : 'text-ink-400'}">
-                  por pacote
-                </button>
-                <button type="button"
-                        onclick={() => packCostMode = 'lot'}
-                        class="px-1.5 py-0.5 rounded {packCostMode === 'lot' ? 'bg-flag-400/20 text-flag-400' : 'text-ink-400'}">
-                  lote
-                </button>
-              </div>
-            </div>
-            <input class="input !py-2 text-sm mono" type="number" step="0.5" min="0" bind:value={packCost} />
-          </div>
-        </div>
-      {:else if destination === 'received' || destination === 'given'}
+      {#if destination === 'received' || destination === 'given'}
         <div class="card p-4 space-y-2">
           <input class="input !py-2 text-sm" placeholder={destination === 'received' ? 'De quem? (opcional)' : 'Pra quem? (opcional)'}
                  bind:value={person} list="scan-people" type="text" />

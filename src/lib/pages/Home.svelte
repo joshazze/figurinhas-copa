@@ -10,10 +10,8 @@
   import { appState, fulfillExpect, fulfillGive } from '../stores/appState.svelte.js';
   import { formatStickerLabel } from '../utils/format.js';
 
-  import Header from '../components/Header.svelte';
   import ProgressRing from '../components/ProgressRing.svelte';
   import StatCard from '../components/StatCard.svelte';
-  import Trophy from '../components/Trophy.svelte';
 
   const fmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cur = (n) => `${appState.settings.currency} ${fmt.format(n || 0)}`;
@@ -75,63 +73,57 @@
 </script>
 
 <section class="screen-enter pb-32">
-  <Header sub="Copa 2026" title="Meu álbum" hosts={true} />
+  <!-- Header sport-tv: wordmark FIGS + tagline curta + tricolor stripe -->
+  <header class="px-5 pt-[max(1rem,calc(var(--safe-top)+0.5rem))] pb-3">
+    <div class="flex items-baseline justify-between gap-3">
+      <div class="flex items-baseline gap-2 min-w-0">
+        <h1 class="display text-4xl font-bold leading-none">
+          <span class="bg-gradient-to-b from-gold-400 to-gold-600 bg-clip-text text-transparent">FIGS</span>
+        </h1>
+        <span class="text-[10px] uppercase tracking-[0.14em] text-ink-400">copa 2026</span>
+      </div>
+      <span class="num text-[11px] text-ink-300">{completionPct().toFixed(1).replace('.', ',')}%</span>
+    </div>
+    <div class="mt-2 h-[3px] w-full rounded-full overflow-hidden flex">
+      <div class="bg-sky26-500" style="width: 33%"></div>
+      <div class="bg-flag-500"  style="width: 33%"></div>
+      <div class="bg-pitch-500" style="width: 34%"></div>
+    </div>
+  </header>
 
-  <!-- Hero tournament card -->
+  <!-- Hero broadcast: ring central + 3 stats em strip -->
   <div class="px-5">
-    <div class="card grain tricolor-bar p-5 pt-7 relative overflow-hidden">
-      <!-- Numero 26 fantasma de fundo (clamp pra nao estourar em telas pequenas) -->
-      <div class="ghost-26 pointer-events-none select-none"
-           style="font-size: clamp(140px, 50vw, 220px); right: -8px; top: -16px;">26</div>
-
-      <!-- Banner topo: trofeu + slogan + chips dos hosts -->
-      <div class="relative z-10 flex items-start justify-between gap-3">
-        <div class="flex items-center gap-3 min-w-0">
-          <Trophy size={40} />
-          <div class="min-w-0">
-            <div class="display text-[11px] tracking-[0.3em] text-gold-400 leading-none">SOMOS 26</div>
-            <div class="text-[10px] uppercase tracking-[0.2em] text-ink-300 mt-1.5 truncate">48 seleções · 16 sedes</div>
-          </div>
-        </div>
-        <div class="flex items-center gap-1 shrink-0">
-          <span class="chip-host us"><span class="flag-mini flag-us"></span> USA</span>
-          <span class="chip-host ca"><span class="flag-mini flag-ca"></span> CAN</span>
-          <span class="chip-host mx"><span class="flag-mini flag-mx"></span> MEX</span>
-        </div>
+    <div class="card p-5 relative overflow-hidden">
+      <div class="flex flex-col items-center">
+        <ProgressRing value={completionPct()} label="do álbum" sub={subtitle()} size={200} stroke={13} />
       </div>
 
-      <!-- Ring central -->
-      <div class="relative z-10 mt-5 flex flex-col items-center">
-        <ProgressRing value={completionPct()} label="completo" sub={subtitle()} size={200} stroke={13} />
-      </div>
-
-      <!-- Mini-stats -->
-      <div class="relative z-10 mt-5 grid grid-cols-3 gap-2">
+      <div class="mt-5 grid grid-cols-3 gap-2">
         <div class="rounded-2xl bg-pitch-400/[0.08] border border-pitch-400/25 py-3 px-2 text-center">
           <div class="num text-xl text-white leading-none">{uniqueOwned()}<span class="text-ink-300 text-xs">/{totalStickers}</span></div>
-          <div class="text-[10px] uppercase tracking-widest text-pitch-400 mt-1">coladas</div>
+          <div class="text-[10px] uppercase tracking-wider text-pitch-400 mt-1">coladas</div>
         </div>
         <div class="rounded-2xl bg-gold-400/[0.10] border border-gold-400/30 py-3 px-2 text-center">
           <div class="num text-xl text-gold-400 leading-none">{uniqueSpecialOwned()}<span class="text-gold-400/80 text-xs">/{totalSpecialStickers()}</span></div>
-          <div class="text-[10px] uppercase tracking-widest text-gold-400 mt-1">douradas ★</div>
+          <div class="text-[10px] uppercase tracking-wider text-gold-400 mt-1">douradas</div>
         </div>
         <div class="rounded-2xl bg-flag-400/[0.08] border border-flag-400/25 py-3 px-2 text-center">
           <div class="num text-xl text-flag-400 leading-none">{totalDuplicates()}</div>
-          <div class="text-[10px] uppercase tracking-widest text-flag-400 mt-1">repetidas</div>
+          <div class="text-[10px] uppercase tracking-wider text-flag-400 mt-1">repetidas</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Faltam pra fechar: times mais perto (NOVA FEATURE) -->
+  <!-- Faltam pra fechar: times mais perto -->
   {#if closingSoon().length > 0}
     <div class="mt-4">
-      <div class="px-5 flex items-end justify-between mb-2">
-        <div>
-          <div class="text-[10px] uppercase tracking-[0.22em] text-ink-300">Faltam pra fechar</div>
-          <h2 class="display text-base font-semibold text-white leading-none mt-1">Times mais perto</h2>
+      <div class="px-5 flex items-end justify-between gap-2 mb-2 min-w-0">
+        <div class="min-w-0 flex-1">
+          <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300 truncate">Quase fechando</div>
+          <h2 class="display text-base font-semibold text-white leading-none mt-1 truncate">Times mais perto</h2>
         </div>
-        <a href="#album" class="text-[11px] text-ink-300 underline">ver álbum</a>
+        <a href="#album" class="text-[11px] text-ink-300 underline shrink-0">ver álbum</a>
       </div>
       <div class="scrollx flex gap-2 overflow-x-auto px-5 pb-1">
         {#each closingSoon() as t (t.team)}
@@ -195,7 +187,7 @@
     <div class="px-5 mt-4">
       <div class="flex items-end justify-between mb-2">
         <div>
-          <div class="text-[10px] uppercase tracking-[0.22em] text-ink-300">Compromissos</div>
+          <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300">Compromissos</div>
           <h2 class="display text-base font-semibold text-white leading-none mt-1">Em aberto</h2>
         </div>
         <a href="#dups" class="text-[11px] text-ink-300 underline">ver todos</a>
@@ -250,7 +242,7 @@
     <div class="px-5 mt-4">
       <div class="flex items-end justify-between mb-2">
         <div>
-          <div class="text-[10px] uppercase tracking-[0.22em] text-ink-300">Atividade</div>
+          <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300">Atividade</div>
           <h2 class="display text-base font-semibold text-white leading-none mt-1">Recente</h2>
         </div>
         <a href="#logs" class="text-[11px] text-ink-300 underline">ver tudo</a>
@@ -303,7 +295,7 @@
         </svg>
       </div>
       <div class="flex-1 min-w-0">
-        <div class="text-[10px] uppercase tracking-[0.22em] text-ink-300">Calendário</div>
+        <div class="text-[10px] uppercase tracking-[0.14em] text-ink-300">Calendário</div>
         <div class="text-sm font-semibold text-white truncate">11 de jun a 19 de jul de 2026</div>
         <div class="text-xs text-ink-300 truncate">104 partidas · final no MetLife</div>
       </div>
