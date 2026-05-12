@@ -9,9 +9,12 @@
   } from '../stores/derived.svelte.js';
   import { appState, fulfillExpect, fulfillGive } from '../stores/appState.svelte.js';
   import { formatStickerLabel } from '../utils/format.js';
+  import { isNative } from '../utils/ocr.js';
 
   import ProgressRing from '../components/ProgressRing.svelte';
   import StatCard from '../components/StatCard.svelte';
+
+  const showScanShortcut = isNative();
 
   const fmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cur = (n) => `${appState.settings.currency} ${fmt.format(n || 0)}`;
@@ -151,18 +154,20 @@
     </div>
   {/if}
 
-  <!-- Atalhos: Scan + Pacote + Repetidas -->
-  <div class="px-5 mt-4 grid grid-cols-3 gap-2">
-    <a href="#scan" class="card p-3 flex flex-col items-center gap-1 hover:bg-white/[0.06] transition text-center">
-      <div class="h-9 w-9 grid place-items-center rounded-xl bg-gold-400/15 text-gold-400 border border-gold-400/30">
-        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M3 7h3l2-2h8l2 2h3v12H3z" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="12" cy="13" r="3.5"/>
-        </svg>
-      </div>
-      <div class="text-[11px] font-semibold text-white">Scan</div>
-      <div class="text-[10px] text-ink-400">foto → ação</div>
-    </a>
+  <!-- Atalhos: Scan (so no app nativo) + Pacote + Repetidas -->
+  <div class="px-5 mt-4 grid {showScanShortcut ? 'grid-cols-3' : 'grid-cols-2'} gap-2">
+    {#if showScanShortcut}
+      <a href="#scan" class="card p-3 flex flex-col items-center gap-1 hover:bg-white/[0.06] transition text-center">
+        <div class="h-9 w-9 grid place-items-center rounded-xl bg-gold-400/15 text-gold-400 border border-gold-400/30">
+          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 7h3l2-2h8l2 2h3v12H3z" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="12" cy="13" r="3.5"/>
+          </svg>
+        </div>
+        <div class="text-[11px] font-semibold text-white">Scan</div>
+        <div class="text-[10px] text-ink-400">foto → ação</div>
+      </a>
+    {/if}
     <a href="#packs" class="card p-3 flex flex-col items-center gap-1 hover:bg-white/[0.06] transition text-center">
       <div class="h-9 w-9 grid place-items-center rounded-xl bg-flag-400/15 text-flag-400 border border-flag-400/30">
         <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8">
