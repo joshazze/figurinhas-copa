@@ -1,23 +1,17 @@
 <script>
   import Header from '../components/Header.svelte';
-  import { ocrAuto, ocrTesseract, ocrPaddle, prewarmPaddleOCR, isNative } from '../utils/ocr.js';
-  import { matchAll, matchAllWithPasses, compareStickers } from '../utils/codeMatch.js';
+  import { matchAll, compareStickers } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
+  import { isNative } from '../utils/ocr.js';
+  import { scan as scanViaBackend } from '../api/scan.js';
+  import { ApiError } from '../api/client.js';
   import {
     addSticker, addPack, fulfillExpect, fulfillGive,
     appState, knownPeople, defaultStickersForSource, PACK_SOURCES
   } from '../stores/appState.svelte.js';
   import { mcStickerByCode, stickerByCode } from '../data/album.js';
 
-  // Versao bumpada a cada deploy do Scan/OCR pra confirmar que o cache do PWA
-  // pegou o build novo. Visivel no header da aba.
-  const SCAN_VERSION = isNative() ? '4.0.0-figs' : '2.1.6';
-
-  // Pre-warm engine PaddleOCR quando user abre a aba — so faz sentido no PWA.
-  // No app nativo, Vision Framework ja vem carregado no iOS.
-  $effect(() => {
-    if (!isNative()) prewarmPaddleOCR();
-  });
+  const SCAN_VERSION = '3.0.0-backend';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -73,47 +67,42 @@
     if (imageUrl && imageUrl.startsWith('blob:')) URL.revokeObjectURL(imageUrl);
     imageUrl = URL.createObjectURL(file);
     lastFile = file;
-    await runOCR(file, 'auto');     // auto = Vision se nativo, Paddle se PWA
+    await runScan(file);
     e.target.value = '';
   }
 
-  async function runOCR(file, engine) {
+  const BACKEND_ERROR_MESSAGES = {
+    pro_tier_required: 'Scan automático é exclusivo do plano Pro. Faça upgrade pra liberar.',
+    session_expired: 'Sessão expirou. Reabra o app pra logar de novo.',
+    invalid_token: 'Sessão inválida. Reabra o app pra logar de novo.',
+    missing_bearer: 'Você precisa entrar antes de escanear.',
+    no_jwt: 'Você precisa entrar antes de escanear.',
+    image_too_large: 'Foto muito grande. Tire uma menor.',
+    network: 'Sem conexão. Verifique sua internet.',
+  };
+
+  async function runScan(file) {
     stage = 'processing';
-    phase = 'prepare';
+    phase = 'upload';
     phasePercent = null;
     errorMsg = '';
     ocrDebug = null;
     try {
-      const fn = engine === 'tesseract' ? ocrTesseract
-               : engine === 'paddle'    ? ocrPaddle
-               : ocrAuto;
-      const result = await fn(file, ({ phase: ph, percent }) => {
-        phase = ph;
-        phasePercent = percent ?? null;
-      });
-      ocrText = result.text;
-      ocrEngine = result.engine;
-      ocrDebug = result.debug;
-      if (result.dataUrl) imageUrl = result.dataUrl;
-      // Lines com pass info -> voting baseado em passes diferentes.
-      const rawMatches = result.lines
-        ? matchAllWithPasses(result.lines).map((m) => ({
-            sticker: stickerByCode[m.code] || mcStickerByCode[m.code],
-            code: m.code,
-            votes: m.votes,
-            passes: m.passes,
-            copies: m.copies || 1
-          })).filter((m) => m.sticker)
-        : matchAll(result.text).map((m) => ({ ...m, copies: 1 }));
+      phase = 'ocr';
+      const res = await scanViaBackend(file);
+      ocrEngine = 'backend';
+      ocrText = res.detections.map((d) => d.raw_text).join(' ');
+      ocrDebug = { detections: res.detections.length };
 
-      // EXPANDE multiplas copias: cada copia vira uma entry separada
-      // (figurinha aparecendo 2x na foto = 2 entries) e ORDENA por
-      // codigo (CAPA, FWC, times alfabeticos, MC) + numero crescente.
+      // Expand copies (same code seen N times → N entries).
       const expanded = [];
-      for (const m of rawMatches) {
-        const copies = Math.max(1, m.copies || 1);
+      for (const d of res.detections) {
+        const sticker = stickerByCode[d.code] || mcStickerByCode[d.code];
+        if (!sticker) continue;
+        const variant = d.code.startsWith('MC-') ? 'mc' : 'album';
+        const copies = Math.max(1, d.copies || 1);
         for (let k = 0; k < copies; k++) {
-          expanded.push({ ...m, copyIndex: k });
+          expanded.push({ sticker, variant, status: d.status, confidence: d.confidence });
         }
       }
       expanded.sort((a, b) => compareStickers(a.sticker, b.sticker));
@@ -121,24 +110,24 @@
       detected = expanded.map((m, i) => ({
         id: `m${i}`,
         sticker: m.sticker,
-        votes: m.votes || 1,
-        passes: m.passes || [],
-        // 2+ passes = auto-confirma, 1 = revisa
-        confirmed: (m.votes || 1) >= 2,
-        variant: 'album'
+        // map backend status → legacy "votes" scale (used by status pill).
+        votes: m.status === 'verde' ? 6 : 2,
+        confirmed: m.status === 'verde',
+        variant: m.variant,
+        confidence: m.confidence,
       }));
       stage = 'review';
     } catch (err) {
       console.error('Scan error:', err);
-      errorMsg = err?.message || 'falha no OCR';
-      ocrDebug = err?.debug || null;
+      const key = err instanceof ApiError ? err.code : 'network';
+      errorMsg = BACKEND_ERROR_MESSAGES[key] || (err.message || 'falha no scan');
       stage = 'error';
     }
   }
 
-  async function retryWithTesseract() {
-    if (!lastFile) return;
-    await runOCR(lastFile, 'tesseract');
+  function ownedFor(d) {
+    const code = d.variant === 'mc' ? `MC-${d.sticker.team}` : d.sticker.code;
+    return appState.collected[code] || 0;
   }
 
   function toggleConfirm(id) {
@@ -222,19 +211,11 @@
   const has13Stickers = $derived(() => detected.some((d) => hasMCVariant(d.sticker)));
 
   const phaseLabel = $derived(() => {
-    if (phase === 'prepare') return 'Preparando imagem…';
-    if (phase === 'engine')  return 'Baixando engine OCR (1ª vez, ~10MB)…';
-    if (phase === 'models')  return 'Baixando modelos (1ª vez, ~15MB)…';
-    if (phase === 'ready')   return 'Engine pronto, iniciando…';
-    if (phase === 'ocr')     return 'Lendo a foto (6 passes, devagar pra não estourar RAM)…';
+    if (phase === 'upload') return 'Comprimindo foto…';
+    if (phase === 'ocr')    return 'Lendo a foto no servidor…';
     return 'Processando…';
   });
-  const phaseSub = $derived(() => {
-    if (phase === 'engine' || phase === 'models') {
-      return 'depois disso fica cacheado e instantâneo';
-    }
-    return null;
-  });
+  const phaseSub = $derived(() => null);
 
   const matchingExpect = $derived(() => {
     if (destination !== 'received') return 0;
@@ -291,7 +272,7 @@
         </label>
 
         <div class="mt-4 text-[10px] uppercase tracking-[0.18em] text-ink-400">
-          engine: {isNative() ? 'Vision Framework (nativo iOS)' : 'PaddleOCR (web)'}
+          engine: servidor (Pro)
         </div>
       </div>
 
@@ -355,6 +336,7 @@
           <div class="text-[10px] uppercase tracking-[0.18em] text-ink-300">confira o que foi lido</div>
           {#each detected as d (d.id)}
             {@const mcCapable = hasMCVariant(d.sticker)}
+            {@const owned = ownedFor(d)}
             <div class="flex items-center gap-2 p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
               <button type="button"
                       class="h-7 w-7 grid place-items-center rounded-md border-2 shrink-0
@@ -362,8 +344,13 @@
                       aria-label="confirmar"
                       onclick={() => toggleConfirm(d.id)}>✓</button>
               <div class="flex-1 min-w-0">
-                <div class="display text-base font-bold text-white leading-none">
-                  {d.variant === 'mc' ? `${d.sticker.team} 13 (MC)` : formatStickerLabel(d.sticker)}
+                <div class="display text-base font-bold text-white leading-none flex items-center gap-2">
+                  <span>{d.variant === 'mc' ? `${d.sticker.team} 13 (MC)` : formatStickerLabel(d.sticker)}</span>
+                  {#if owned === 0}
+                    <span class="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-pitch-400/20 text-pitch-400">nova</span>
+                  {:else}
+                    <span class="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gold-400/15 text-gold-400">×{owned} tenho</span>
+                  {/if}
                 </div>
                 <div class="text-[10px] text-ink-400 truncate">
                   {d.variant === 'mc' ? 'Promo McDonald\'s' : d.sticker.section}
