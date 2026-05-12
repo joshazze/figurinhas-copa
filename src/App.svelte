@@ -10,8 +10,18 @@
   import Logs from './lib/pages/Logs.svelte';
   import Settings from './lib/pages/Settings.svelte';
   import { pullOnBoot, setupAutoSync } from './lib/api/sync.js';
+  import { hasScan, isAuthenticated } from './lib/stores/authState.svelte.js';
 
   let tab = $state(readHash());
+
+  // Anyone landing on #scan without a Pro tier is redirected to home.
+  // (Gate covers the screen too, but this prevents the URL from sticking.)
+  $effect(() => {
+    if (tab === 'scan' && !hasScan()) {
+      tab = 'home';
+      history.replaceState(null, '', '#home');
+    }
+  });
 
   onMount(async () => {
     setupAutoSync();
@@ -34,17 +44,19 @@
   }
 </script>
 
-<main class="mx-auto max-w-md min-h-dvh">
-  {#if tab === 'home'}     <Home />
-  {:else if tab === 'album'} <Album />
-  {:else if tab === 'dups'}  <Duplicates />
-  {:else if tab === 'scan'}  <Scan />
-  {:else if tab === 'packs'} <Packs />
-  {:else if tab === 'logs'}  <Logs />
-  {:else if tab === 'settings'} <Settings />
-  {/if}
-</main>
+{#if isAuthenticated()}
+  <main class="mx-auto max-w-md min-h-dvh">
+    {#if tab === 'home'}     <Home />
+    {:else if tab === 'album'} <Album />
+    {:else if tab === 'dups'}  <Duplicates />
+    {:else if tab === 'scan'}  <Scan />
+    {:else if tab === 'packs'} <Packs />
+    {:else if tab === 'logs'}  <Logs />
+    {:else if tab === 'settings'} <Settings />
+    {/if}
+  </main>
 
-<BottomNav current={tab} onChange={go} />
+  <BottomNav current={tab} onChange={go} />
+{/if}
 
 <ActivationGate />
