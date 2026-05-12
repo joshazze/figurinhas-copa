@@ -1,5 +1,6 @@
 <script>
   import { appState, exportJSON, importJSON, resetAll, updateSettings } from '../stores/appState.svelte.js';
+  import { auth, daysRemaining, isAuthenticated, clearAuth } from '../stores/authState.svelte.js';
   import Header from '../components/Header.svelte';
 
   let importErr = $state('');
@@ -45,6 +46,32 @@
   <Header sub="Backup e preferências" title="Ajustes" hosts={false} />
 
   <div class="px-5 space-y-3">
+    {#if isAuthenticated()}
+      {@const days = daysRemaining()}
+      {@const isPro = auth.tier === 'pro'}
+      <div class="card p-4">
+        <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">plano</div>
+        <div class="mt-2 flex items-center justify-between">
+          <div>
+            <div class="display text-xl font-bold {isPro ? 'text-gold-400' : 'text-pitch-400'}">
+              {isPro ? 'Pro' : 'Lite'}
+            </div>
+            <div class="text-[11px] text-ink-300 mt-0.5">
+              {isPro ? 'Catálogo + sync + scan automático' : 'Catálogo + sync (sem scan)'}
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="num text-2xl text-white">{days}</div>
+            <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400">
+              {days === 1 ? 'dia' : 'dias'} restante{days === 1 ? '' : 's'}
+            </div>
+          </div>
+        </div>
+        <button type="button" onclick={clearAuth}
+                class="mt-3 text-[11px] text-ink-400 underline">sair (revogar acesso neste aparelho)</button>
+      </div>
+    {/if}
+
     <div class="card p-4">
       <div class="text-[11px] uppercase tracking-[0.18em] text-ink-300">moeda</div>
       <div class="mt-2 grid grid-cols-3 gap-2">

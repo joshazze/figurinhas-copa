@@ -6,6 +6,11 @@ export async function redeem(code) {
     method: 'POST',
     body: { code: code.trim().toUpperCase(), fingerprint: auth.deviceId },
   });
-  setAuth({ jwt: res.jwt, userId: res.user_id, validUntil: res.valid_until });
+  setAuth({
+    jwt: res.jwt,
+    userId: res.user_id,
+    validUntil: res.valid_until,
+    tier: res.tier,
+  });
   return res;
 }
