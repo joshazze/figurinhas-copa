@@ -1,5 +1,7 @@
 <script>
+  import { onMount } from 'svelte';
   import BottomNav from './lib/components/BottomNav.svelte';
+  import ActivationGate from './lib/components/ActivationGate.svelte';
   import Home from './lib/pages/Home.svelte';
   import Album from './lib/pages/Album.svelte';
   import Duplicates from './lib/pages/Duplicates.svelte';
@@ -7,8 +9,14 @@
   import Packs from './lib/pages/Packs.svelte';
   import Logs from './lib/pages/Logs.svelte';
   import Settings from './lib/pages/Settings.svelte';
+  import { pullOnBoot, setupAutoSync } from './lib/api/sync.js';
 
   let tab = $state(readHash());
+
+  onMount(async () => {
+    setupAutoSync();
+    await pullOnBoot();
+  });
 
   function readHash() {
     const h = (location.hash || '').replace('#', '');
@@ -38,3 +46,5 @@
 </main>
 
 <BottomNav current={tab} onChange={go} />
+
+<ActivationGate />
