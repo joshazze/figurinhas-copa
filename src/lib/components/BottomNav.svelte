@@ -1,8 +1,18 @@
 <script>
   import { isNative } from '../utils/ocr.js';
   import { hasScan } from '../stores/authState.svelte.js';
+  import { syncStatus } from '../api/sync.js';
 
   let { current = 'home', onChange = () => {} } = $props();
+
+  const syncDot = $derived(() => {
+    switch (syncStatus.state) {
+      case 'pushing':
+      case 'pulling':  return { color: 'bg-gold-400', label: 'sincronizando', pulse: true };
+      case 'offline':  return { color: 'bg-flag-500', label: 'sem conexão', pulse: false };
+      default:         return { color: 'bg-pitch-500', label: 'sincronizado', pulse: false };
+    }
+  });
 
   // Scan tab reveals when the user has a Pro plan (server OCR) or is on the
   // native iOS app (Vision Framework).
@@ -20,6 +30,12 @@
 
 <nav class="fixed bottom-0 inset-x-0 z-40 px-3 pb-[max(0.6rem,var(--safe-bottom))] pt-2
             bg-gradient-to-t from-ink-950 via-ink-950/90 to-transparent">
+  <div class="mx-auto max-w-md flex justify-end px-1 pb-1">
+    <span class="flex items-center gap-1 text-[9px] uppercase tracking-wider text-ink-400" title={syncDot().label}>
+      <span class="h-1.5 w-1.5 rounded-full {syncDot().color} {syncDot().pulse ? 'animate-pulse' : ''}"></span>
+      {syncDot().label}
+    </span>
+  </div>
   <div class="card mx-auto max-w-md w-full flex items-stretch p-1 tricolor-bar min-w-0">
     {#each tabs as t}
       <button
