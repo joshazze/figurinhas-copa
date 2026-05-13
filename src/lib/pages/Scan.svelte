@@ -35,7 +35,9 @@
   // 3.15.0 lightbox: zoom com pan/scroll real + marcar varias areas e analisar em batch
   // 3.15.1 precisao: cutoff 92->94, len delta 2->1, ocr_conf >= 0.88 pra non-exact match
   // 3.15.2 recall: 9 tiles 3x3 (era 4 quadrants) + batch reanalisar tentatives + feedback
-  const SCAN_VERSION = '3.15.2';
+  // 3.15.3 learning: correcoes alimentam alias cache (rapido pra fragments ja vistos)
+  //                  + false_positives viram blacklist · botoes editar/excluir lado a lado
+  const SCAN_VERSION = '3.15.3';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -135,6 +137,7 @@
       confidence: d.confidence,
       bbox: d.bbox || null,
       status: d.status,
+      raw_text: d.raw_text || null,
     }];
     next.sort((a, b) => {
       if (a.confirmed !== b.confirmed) return a.confirmed ? -1 : 1;
@@ -221,7 +224,10 @@
         kind: 'correction',
         original_code: orig,
         correct_code: corrected,
-        raw_text: editingDetected.sticker?.code || null,
+        // raw_text MUST be the actual OCR string the backend produced — that's
+        // what the learned-alias cache keys on. Falls back to canonical code if
+        // the detection came from an older client without the field.
+        raw_text: editingDetected.raw_text || orig,
         bbox: editingDetected.bbox,
         image_hash: fileFingerprint(lastFile),
       });
@@ -248,6 +254,7 @@
       await postScanFeedback({
         kind: 'false_positive',
         original_code: d.variant === 'mc' ? `MC-${d.sticker.team}` : d.sticker.code,
+        raw_text: d.raw_text || null,
         bbox: d.bbox,
         image_hash: fileFingerprint(lastFile),
       });
@@ -767,7 +774,7 @@
                   <span class="text-[9px] text-ink-400 uppercase">revisar</span>
                 {/if}
               </div>
-              <div class="shrink-0 flex flex-col gap-1">
+              <div class="shrink-0 flex flex-row gap-1">
                 <button class="h-7 w-7 grid place-items-center rounded-md border border-white/10 bg-white/[0.04] text-ink-300 hover:text-white hover:border-white/20"
                         onclick={() => openEdit(d)} type="button" aria-label="corrigir código" title="código errado?">
                   <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
