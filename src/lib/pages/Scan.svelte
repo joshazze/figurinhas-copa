@@ -51,7 +51,9 @@
   //        HUD enriquecido (2 reticles, scan-line horizontal+vertical, ring glow, phase bar),
   //        animacao bbox-arrive cinematografica (scale+sweep+pulse), tabs de review,
   //        cards de detection com deep-scan reveal
-  const SCAN_VERSION = '4.0.0';
+  // 4.0.1  remove auto-open lightbox em tap na foto da review (era irritante);
+  //        botao 'deep scan' dedicado fica ao lado dos stats, mais explicito
+  const SCAN_VERSION = '4.0.1';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -723,21 +725,32 @@
     <div class="px-5 space-y-3">
       {#if imageUrl}
         <div class="card p-2">
-          <button type="button" onclick={() => (lightboxOpen = true)}
-                  class="block w-full appearance-none p-0 bg-transparent border-0 cursor-zoom-in">
-            <ScanOverlay imageUrl={imageUrl} scanning={false}
-                         bboxes={[
-                           ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
-                           ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
-                         ]} />
-          </button>
-          <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400 text-center mt-2">
-            {detected.length} código{detected.length === 1 ? '' : 's'}
-            {#if tentatives.length > 0} · {tentatives.length} possíve{tentatives.length === 1 ? 'l' : 'is'}{/if}
-            · {ocrEngine}
+          <ScanOverlay imageUrl={imageUrl} scanning={false}
+                       bboxes={[
+                         ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
+                         ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
+                       ]} />
+          <div class="flex items-center justify-between mt-2 px-1 gap-2">
+            <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400">
+              {detected.length} código{detected.length === 1 ? '' : 's'}
+              {#if tentatives.length > 0} · {tentatives.length} possíve{tentatives.length === 1 ? 'l' : 'is'}{/if}
+              · {ocrEngine}
+            </div>
+            <button type="button"
+                    onclick={() => (lightboxOpen = true)}
+                    class="rounded-lg border border-sky26-400/40 bg-sky26-500/10 text-sky26-300
+                           text-[10px] font-medium uppercase tracking-wider px-2.5 py-1.5
+                           hover:bg-sky26-500/20 active:scale-95 transition flex items-center gap-1.5">
+              <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3h6v2H5v4H3V3zm12 0h6v6h-2V5h-4V3zM3 15h2v4h4v2H3v-6zm16 0h2v6h-6v-2h4v-4z"/>
+                <circle cx="12" cy="12" r="2.5"/>
+              </svg>
+              deep scan
+            </button>
           </div>
           {#if ocrDebug}
-            <details class="mt-2 text-[10px] text-ink-400">
+            <details class="mt-2 text-[10px] text-ink-400 px-1">
               <summary class="cursor-pointer underline">debug</summary>
               <pre class="mono mt-1 whitespace-pre-wrap break-all">{JSON.stringify(ocrDebug, null, 2)}</pre>
             </details>
