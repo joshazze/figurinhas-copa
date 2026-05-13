@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+<title>Figs · Recuperar</title>
+<style>
+  html, body { margin: 0; padding: 0; min-height: 100vh; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #050b1f; color: #dde3f2;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .box { max-width: 360px; width: 100%; text-align: center; }
+  .logo { font-size: 48px; font-weight: 700; letter-spacing: 0.04em; color: #fbbf24; }
+  .tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3em; color: #9aa6c8; margin-top: 4px; }
+  h1 { font-size: 18px; font-weight: 600; color: #f5f7ff; margin: 32px 0 8px; }
+  p { font-size: 14px; color: #b9c2dd; margin: 8px 0; line-height: 1.5; }
+  button {
+    width: 100%;
+    background: #fbbf24; color: #050b1f;
+    border: 0; border-radius: 10px;
+    padding: 14px; margin-top: 24px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .status { margin-top: 16px; font-size: 13px; color: #9aa6c8; min-height: 20px; }
+  .ok { color: #86efac; }
+  .err { color: #fca5a5; }
+  ul { text-align: left; padding-left: 18px; font-size: 13px; color: #b9c2dd; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="logo">FIGS</div>
+    <div class="tag">recuperar app</div>
+
+    <h1>Reset completo do aparelho</h1>
+    <p>Use isso se o app travou em uma versão antiga, não carrega, ou está se comportando estranho.</p>
+    <p>Vai limpar:</p>
+    <ul>
+      <li>Cache do navegador (service worker)</li>
+      <li>Sessão salva (você vai precisar fazer login de novo)</li>
+      <li>Backup local não-sincronizado (se algum)</li>
+    </ul>
+    <p style="color:#fbbf24"><strong>Faça backup antes</strong> em Ajustes → exportar, se ainda conseguir abrir o app.</p>
+
+    <button id="btn" type="button">Resetar agora</button>
+    <div id="status" class="status"></div>
+  </div>
+
+<script>
+(() => {
+  const btn = document.getElementById('btn');
+  const status = document.getElementById('status');
+
+  function log(msg, kind) {
+    status.textContent = msg;
+    status.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    log('Limpando...');
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch (_) {}
+
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (_) {}
+
+    try { localStorage.clear(); } catch (_) {}
+    try { sessionStorage.clear(); } catch (_) {}
+
+    log('Pronto. Reabrindo o app em 2s...', 'ok');
+    setTimeout(() => {
+      // Cache-bust to make sure the browser fetches a fresh index.html.
+      window.location.replace('./?reset=' + Date.now());
+    }, 2000);
+  });
+})();
+</script>
+</body>
+</html>
