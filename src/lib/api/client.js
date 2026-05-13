@@ -1,7 +1,7 @@
 // Thin fetch wrapper that prepends the API base URL and the Bearer token.
 import { auth } from '../stores/authState.svelte.js';
 
-export const API_BASE = 'https://figsapp.duckdns.org/api';
+export const API_BASE = import.meta.env.VITE_API_BASE || 'https://figsapp.duckdns.org/api';
 
 export class ApiError extends Error {
   constructor(status, code, message) {
