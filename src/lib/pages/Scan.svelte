@@ -43,7 +43,9 @@
   // 3.16.2 card-detector backend + UI mostra bboxes 'candidate' (cinza) durante scan
   // 3.16.3 removido card-detector como gatekeeper (falha em white bg / cascade);
   //        dedup agora por IoU bbox OR centroid distance — funciona em qualquer cenario
-  const SCAN_VERSION = '3.16.3';
+  // 3.16.4 dedup agressiva: IoU 0.05 + mostly-contained + skip halves (-30% latency) (falha em white bg / cascade);
+  //        dedup agora por IoU bbox OR centroid distance — funciona em qualquer cenario
+  const SCAN_VERSION = '3.16.4';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
