@@ -33,8 +33,9 @@
   // 3.13.0 1 Detection por figurinha fisica (sem duplicar markers) + backend cap 2400
   // 3.14.0 lightbox: zoom + tap em regiao manda crop pro /scan/region (resgate ad-hoc)
   // 3.15.0 lightbox: zoom com pan/scroll real + marcar varias areas e analisar em batch
-  // 3.16.0 precisao: cutoff 92->94, len delta 2->1, ocr_conf >= 0.88 pra non-exact match
-  const SCAN_VERSION = '3.16.0';
+  // 3.15.1 precisao: cutoff 92->94, len delta 2->1, ocr_conf >= 0.88 pra non-exact match
+  // (versionamento revisado: patch bumps pra ajustes; minor so pra mudanca de superfice)
+  const SCAN_VERSION = '3.15.1';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
