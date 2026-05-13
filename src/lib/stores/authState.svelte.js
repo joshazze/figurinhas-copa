@@ -91,3 +91,13 @@ export function clearAuth() {
 export function hasScan() {
   return isAuthenticated() && auth.tier === 'pro';
 }
+
+export const renewModal = $state({ open: false });
+
+export function openRenewModal() {
+  renewModal.open = true;
+}
+
+export function closeRenewModal() {
+  renewModal.open = false;
+}

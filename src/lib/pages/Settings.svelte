@@ -1,6 +1,6 @@
 <script>
   import { appState, exportJSON, importJSON, resetAll, updateSettings } from '../stores/appState.svelte.js';
-  import { auth, daysRemaining, isAuthenticated, clearAuth } from '../stores/authState.svelte.js';
+  import { auth, daysRemaining, isAuthenticated, clearAuth, openRenewModal } from '../stores/authState.svelte.js';
   import { changePassword } from '../api/auth.js';
   import { ApiError } from '../api/client.js';
   import Header from '../components/Header.svelte';
@@ -101,7 +101,9 @@
             </div>
           </div>
         </div>
-        <div class="mt-3 flex items-center gap-3 text-[11px]">
+        <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+          <button type="button" onclick={openRenewModal}
+                  class="text-gold-400 underline">renovar</button>
           <button type="button" onclick={() => { showPwdForm = !showPwdForm; pwdErr = ''; pwdOk = ''; }}
                   class="text-ink-300 underline">trocar senha</button>
           <button type="button" onclick={clearAuth}
