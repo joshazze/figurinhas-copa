@@ -73,7 +73,7 @@
   }
 
   function canSubmit() {
-    if (!email.includes('@')) return false;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
     if (password.length < 6 && view === 'signup') return false;
     if (password.length < 1 && view !== 'signup') return false;
     if (needsCode() && code.replace(/[^A-Z0-9]/g, '').length < 20) return false;
@@ -173,7 +173,7 @@
             {:else if view === 'login'}
               Entrar
             {:else}
-              Renovar
+              Renovar conta
             {/if}
           </button>
         </form>

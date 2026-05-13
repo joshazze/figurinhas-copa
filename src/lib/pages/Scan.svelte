@@ -118,7 +118,7 @@
       }));
       stage = 'review';
     } catch (err) {
-      console.error('Scan error:', err);
+      if (import.meta.env.DEV) console.error('Scan error:', err);
       const key = err instanceof ApiError ? err.code : 'network';
       errorMsg = BACKEND_ERROR_MESSAGES[key] || (err.message || 'falha no scan');
       stage = 'error';
