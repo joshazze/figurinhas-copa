@@ -1,7 +1,7 @@
 <script>
   import { isNative } from '../utils/ocr.js';
   import { hasScan } from '../stores/authState.svelte.js';
-  import { syncStatus } from '../api/sync.js';
+  import { syncStatus } from '../api/sync.svelte.js';
 
   let { current = 'home', onChange = () => {} } = $props();
 

@@ -86,8 +86,8 @@ export function clearAuth() {
   auth.validUntil = null;
   auth.tier = null;
   // keep email so login form pre-fills with last used address
-  // Defer import to break circular dep with sync.js.
-  import('../api/sync.js').then(({ resetSyncState }) => resetSyncState());
+  // Defer import to break circular dep with sync.
+  import('../api/sync.svelte.js').then(({ resetSyncState }) => resetSyncState());
 }
 
 export function hasScan() {

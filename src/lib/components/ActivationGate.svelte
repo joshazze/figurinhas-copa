@@ -2,7 +2,7 @@
   import { signup, login, renew } from '../api/auth.js';
   import { ApiError } from '../api/client.js';
   import { auth, isAuthenticated } from '../stores/authState.svelte.js';
-  import { pullOnBoot } from '../api/sync.js';
+  import { pullOnBoot } from '../api/sync.svelte.js';
 
   // 'landing' | 'signup' | 'login' | 'renew'
   let view = $state('landing');
