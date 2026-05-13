@@ -1,7 +1,6 @@
-// Store reativo (Svelte 5 runes) com persistencia em localStorage.
-// Compativel com export/import JSON.
-
-const STORAGE_KEY = 'figurinhas-copa@v1';
+// Store reativo (Svelte 5 runes). Server e source-of-truth — nao persiste em
+// localStorage. Estado inicial e vazio; sync.pullOnBoot() carrega do servidor
+// e cada mutation dispara push imediato.
 
 // Quantidade de figurinhas por origem do pacote (oficial Panini Copa 2026).
 //   - mc:    pacote McDonald's (5 figurinhas)
@@ -25,37 +24,7 @@ const defaultState = {
   meta: { createdAt: null }
 };
 
-function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(defaultState);
-    const parsed = JSON.parse(raw);
-    return {
-      ...structuredClone(defaultState),
-      ...parsed,
-      logs: Array.isArray(parsed.logs) ? parsed.logs : [],
-      commitments: Array.isArray(parsed.commitments) ? parsed.commitments : [],
-      settings: { ...defaultState.settings, ...(parsed.settings || {}) },
-      meta: { ...defaultState.meta, ...(parsed.meta || {}) }
-    };
-  } catch {
-    return structuredClone(defaultState);
-  }
-}
-
-const initial = load();
-if (!initial.meta.createdAt) initial.meta.createdAt = new Date().toISOString();
-
-export const appState = $state(initial);
-
-// Persistencia automatica
-$effect.root(() => {
-  $effect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-    } catch {}
-  });
-});
+export const appState = $state(structuredClone(defaultState));
 
 // === Logs ===
 
@@ -138,6 +107,18 @@ export function resetAll() {
   appState.packs = [];
   appState.logs = [];
   appState.commitments = [];
+}
+
+// Reset local state to defaults (used on logout to prevent the next user from
+// seeing leftover data before pull-on-boot finishes).
+export function clearLocalState() {
+  const empty = structuredClone(defaultState);
+  appState.collected = empty.collected;
+  appState.packs = empty.packs;
+  appState.logs = empty.logs;
+  appState.commitments = empty.commitments;
+  appState.settings = empty.settings;
+  appState.meta = empty.meta;
 }
 
 // === Compromissos (prometidas/esperadas) ===
