@@ -1,10 +1,41 @@
 <script>
   import { appState, exportJSON, importJSON, resetAll, updateSettings } from '../stores/appState.svelte.js';
   import { auth, daysRemaining, isAuthenticated, clearAuth } from '../stores/authState.svelte.js';
+  import { changePassword } from '../api/auth.js';
+  import { ApiError } from '../api/client.js';
   import Header from '../components/Header.svelte';
 
   let importErr = $state('');
   let confirmReset = $state(false);
+
+  let showPwdForm = $state(false);
+  let oldPwd = $state('');
+  let newPwd = $state('');
+  let pwdErr = $state('');
+  let pwdOk = $state('');
+  let pwdLoading = $state(false);
+
+  async function submitChangePwd(e) {
+    e.preventDefault();
+    if (pwdLoading) return;
+    pwdErr = '';
+    pwdOk = '';
+    pwdLoading = true;
+    try {
+      await changePassword({ oldPassword: oldPwd, newPassword: newPwd });
+      pwdOk = 'Senha trocada.';
+      oldPwd = '';
+      newPwd = '';
+      setTimeout(() => { showPwdForm = false; pwdOk = ''; }, 1500);
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : null;
+      if (code === 'invalid_credentials') pwdErr = 'Senha atual incorreta.';
+      else if (code === 'same_password') pwdErr = 'Nova senha igual à atual.';
+      else pwdErr = err.message || 'Erro ao trocar senha.';
+    } finally {
+      pwdLoading = false;
+    }
+  }
 
   function downloadBackup() {
     const blob = new Blob([exportJSON()], { type: 'application/json' });
@@ -70,8 +101,38 @@
             </div>
           </div>
         </div>
-        <button type="button" onclick={clearAuth}
-                class="mt-3 text-[11px] text-ink-400 underline">sair desse aparelho</button>
+        <div class="mt-3 flex items-center gap-3 text-[11px]">
+          <button type="button" onclick={() => { showPwdForm = !showPwdForm; pwdErr = ''; pwdOk = ''; }}
+                  class="text-ink-300 underline">trocar senha</button>
+          <button type="button" onclick={clearAuth}
+                  class="text-ink-400 underline">sair desse aparelho</button>
+        </div>
+
+        {#if showPwdForm}
+          <form onsubmit={submitChangePwd} class="mt-3 space-y-2">
+            <input
+              type="password"
+              autocomplete="current-password"
+              placeholder="senha atual"
+              bind:value={oldPwd}
+              class="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-ink-200 placeholder:text-ink-400/60 focus:outline-none focus:ring-2 focus:ring-gold/60"
+            />
+            <input
+              type="password"
+              autocomplete="new-password"
+              placeholder="nova senha (mín. 6)"
+              bind:value={newPwd}
+              class="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-ink-200 placeholder:text-ink-400/60 focus:outline-none focus:ring-2 focus:ring-gold/60"
+            />
+            {#if pwdErr}<p class="text-[11px] text-flag">{pwdErr}</p>{/if}
+            {#if pwdOk}<p class="text-[11px] text-pitch-400">{pwdOk}</p>{/if}
+            <button
+              type="submit"
+              disabled={pwdLoading || oldPwd.length < 1 || newPwd.length < 6}
+              class="w-full rounded-lg bg-gold py-2 text-sm font-medium text-[#050b1f] transition disabled:opacity-50"
+            >{pwdLoading ? 'Salvando...' : 'Salvar'}</button>
+          </form>
+        {/if}
       </div>
     {/if}
 
