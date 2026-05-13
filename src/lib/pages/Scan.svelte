@@ -3,7 +3,7 @@
   import { matchAll, compareStickers } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
   import { isNative } from '../utils/ocr.js';
-  import { scan as scanViaBackend, scanStream, scanRegion } from '../api/scan.js';
+  import { scan as scanViaBackend, scanStream, scanRegion, fileFingerprint, postScanFeedback } from '../api/scan.js';
   import { ApiError } from '../api/client.js';
   import {
     addSticker, addPack, fulfillExpect, fulfillGive,
@@ -34,8 +34,8 @@
   // 3.14.0 lightbox: zoom + tap em regiao manda crop pro /scan/region (resgate ad-hoc)
   // 3.15.0 lightbox: zoom com pan/scroll real + marcar varias areas e analisar em batch
   // 3.15.1 precisao: cutoff 92->94, len delta 2->1, ocr_conf >= 0.88 pra non-exact match
-  // (versionamento revisado: patch bumps pra ajustes; minor so pra mudanca de superfice)
-  const SCAN_VERSION = '3.15.1';
+  // 3.15.2 recall: 9 tiles 3x3 (era 4 quadrants) + batch reanalisar tentatives + feedback
+  const SCAN_VERSION = '3.15.2';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -151,7 +151,108 @@
       confidence: d.confidence,
       loading: false,
       failed: false,
+      selected: true,   // default-checked so the batch button works in 1 tap
     }];
+  }
+
+  function toggleTentativeSelect(id) {
+    tentatives = tentatives.map((t) => t.id === id ? { ...t, selected: !t.selected } : t);
+  }
+
+  function selectAllTentatives(value) {
+    tentatives = tentatives.map((t) => ({ ...t, selected: value }));
+  }
+
+  async function reanalyzeSelectedTentatives() {
+    if (!lastFile) return;
+    const targets = tentatives.filter((t) => t.selected && !t.loading && !t.failed && t.bbox);
+    if (targets.length === 0) return;
+    // mark all loading at once for visual feedback
+    tentatives = tentatives.map((t) => targets.find((x) => x.id === t.id) ? { ...t, loading: true, failed: false } : t);
+    for (const t of targets) {
+      try {
+        const res = await scanRegion(lastFile, t.bbox);
+        if (res?.matched && res.detection) {
+          // promote
+          tentatives = tentatives.filter((x) => x.id !== t.id);
+          addConfirmedDetection(res.detection);
+        } else {
+          setTentativeFlag(t.id, { loading: false, failed: true });
+        }
+      } catch {
+        setTentativeFlag(t.id, { loading: false, failed: true });
+      }
+    }
+  }
+
+  // ===== Feedback loop =====
+
+  let editingDetected = $state(null);  // {id, code, sticker, ...} when modal open
+  let editValue = $state('');
+  let editSubmitting = $state(false);
+  let toastMsg = $state('');
+
+  function openEdit(d) {
+    editingDetected = d;
+    editValue = d.variant === 'mc' ? `MC-${d.sticker.team}` : d.sticker.code;
+  }
+
+  function closeEdit() {
+    editingDetected = null;
+    editValue = '';
+    editSubmitting = false;
+  }
+
+  function flashToast(msg) {
+    toastMsg = msg;
+    setTimeout(() => { toastMsg = ''; }, 2200);
+  }
+
+  async function submitCorrection() {
+    if (!editingDetected || editSubmitting) return;
+    const orig = editingDetected.variant === 'mc'
+      ? `MC-${editingDetected.sticker.team}`
+      : editingDetected.sticker.code;
+    const corrected = editValue.trim().toUpperCase().replace(/[^A-Z0-9\-]/g, '');
+    if (!corrected || corrected === orig) { closeEdit(); return; }
+    editSubmitting = true;
+    try {
+      await postScanFeedback({
+        kind: 'correction',
+        original_code: orig,
+        correct_code: corrected,
+        raw_text: editingDetected.sticker?.code || null,
+        bbox: editingDetected.bbox,
+        image_hash: fileFingerprint(lastFile),
+      });
+      // Apply the correction locally too (replace sticker on the card).
+      const newSticker = stickerByCode[corrected] || mcStickerByCode[corrected];
+      if (newSticker) {
+        const variant = corrected.startsWith('MC-') ? 'mc' : 'album';
+        detected = detected.map((d) => d.id === editingDetected.id
+          ? { ...d, sticker: newSticker, variant, confirmed: true } : d);
+        flashToast('Correção salva. Obrigado!');
+      } else {
+        flashToast('Código não encontrado no álbum');
+      }
+    } catch {
+      flashToast('Não consegui salvar o feedback');
+    } finally {
+      closeEdit();
+    }
+  }
+
+  async function reportFalsePositive(d) {
+    detected = detected.filter((x) => x.id !== d.id);
+    try {
+      await postScanFeedback({
+        kind: 'false_positive',
+        original_code: d.variant === 'mc' ? `MC-${d.sticker.team}` : d.sticker.code,
+        bbox: d.bbox,
+        image_hash: fileFingerprint(lastFile),
+      });
+      flashToast('Marcada como erro. Obrigado!');
+    } catch {}
   }
 
   function setTentativeFlag(id, patch) {
@@ -221,6 +322,11 @@
         } else {
           setMarkStatus(mark.id, 'failed');
           failedCount++;
+          // user pointed at a spot expecting a sticker; backend couldn't read it.
+          // Log as 'missed' so we can target that region in future model passes.
+          postScanFeedback({
+            kind: 'missed', bbox: mark.bbox, image_hash: fileFingerprint(lastFile),
+          }).catch(() => {});
         }
       } catch {
         setMarkStatus(mark.id, 'failed');
@@ -545,23 +651,33 @@
       {/if}
 
       {#if tentatives.length > 0}
+        {@const selectedCount = tentatives.filter((t) => t.selected).length}
         <div class="card p-3 space-y-2 border border-gold-400/30">
-          <div class="text-[10px] uppercase tracking-[0.18em] text-gold-400">
-            possíveis ({tentatives.length}) — circuladas na foto
+          <div class="flex items-center justify-between">
+            <div class="text-[10px] uppercase tracking-[0.18em] text-gold-400">
+              possíveis ({tentatives.length}) — circuladas na foto
+            </div>
+            <button type="button"
+                    onclick={() => selectAllTentatives(selectedCount !== tentatives.length)}
+                    class="text-[10px] underline text-ink-300">
+              {selectedCount === tentatives.length ? 'limpar' : 'todas'}
+            </button>
           </div>
           <p class="text-[11px] text-ink-300">
-            Toca pra IA reanalisar a região com mais precisão. Se mesmo assim não identificar, o texto vai pro campo manual abaixo.
+            Selecione as que parecem cromos e toque <strong class="text-gold-400">reanalisar selecionadas</strong>. A IA roda OCR pesado em cada região — se identificar, vira card verde.
           </p>
           <div class="grid grid-cols-2 gap-2">
             {#each tentatives as t (t.id)}
-              <button type="button"
-                      disabled={t.loading}
-                      onclick={() => scrutinizeTentative(t)}
-                      class="rounded-lg border p-2 text-left transition flex items-center gap-2 disabled:opacity-60
-                             {t.failed
-                               ? 'border-flag-500/40 bg-flag-500/5 hover:bg-flag-500/10'
-                               : 'border-gold-400/30 bg-gold-400/5 hover:bg-gold-400/10'}">
-                <BboxCrop imageUrl={imageUrl} bbox={t.bbox} size={48} scanning={t.loading} />
+              <label class="rounded-lg border p-2 transition flex items-center gap-2 cursor-pointer
+                            {t.failed
+                              ? 'border-flag-500/40 bg-flag-500/5'
+                              : t.selected
+                                ? 'border-gold-400/60 bg-gold-400/10'
+                                : 'border-white/10 bg-white/[0.03]'}">
+                <input type="checkbox" class="shrink-0 h-4 w-4 accent-gold-400"
+                       checked={t.selected} disabled={t.loading}
+                       onchange={() => toggleTentativeSelect(t.id)} />
+                <BboxCrop imageUrl={imageUrl} bbox={t.bbox} size={44} scanning={t.loading} />
                 <div class="min-w-0 flex-1">
                   <div class="mono text-[11px] text-ink-200 truncate">"{t.raw_text}"</div>
                   <div class="text-[9px] mt-0.5"
@@ -569,17 +685,26 @@
                        class:text-flag-400={t.failed}
                        class:text-ink-300={t.loading}>
                     {#if t.loading}
-                      analisando de novo…
+                      analisando…
                     {:else if t.failed}
-                      não identifiquei · usa o campo manual
+                      não identifiquei
                     {:else}
-                      tap p/ reanalisar com IA
+                      pronta pra reanalisar
                     {/if}
                   </div>
                 </div>
-              </button>
+              </label>
             {/each}
           </div>
+          {#if selectedCount > 0}
+            <button type="button"
+                    onclick={reanalyzeSelectedTentatives}
+                    disabled={tentatives.some((t) => t.loading)}
+                    class="w-full rounded-xl bg-gold-400 py-2.5 text-sm font-semibold text-[#050b1f]
+                           active:scale-[0.99] transition disabled:opacity-50">
+              ✨ reanalisar {selectedCount} {selectedCount === 1 ? 'selecionada' : 'selecionadas'}
+            </button>
+          {/if}
         </div>
       {/if}
 
@@ -642,7 +767,21 @@
                   <span class="text-[9px] text-ink-400 uppercase">revisar</span>
                 {/if}
               </div>
-              <button class="text-ink-400 px-2 text-xs" onclick={() => removeDetected(d.id)} type="button" aria-label="remover">✕</button>
+              <div class="shrink-0 flex flex-col gap-1">
+                <button class="h-7 w-7 grid place-items-center rounded-md border border-white/10 bg-white/[0.04] text-ink-300 hover:text-white hover:border-white/20"
+                        onclick={() => openEdit(d)} type="button" aria-label="corrigir código" title="código errado?">
+                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button class="h-7 w-7 grid place-items-center rounded-md border border-flag-500/30 bg-flag-500/10 text-flag-400 hover:bg-flag-500/20"
+                        onclick={() => reportFalsePositive(d)} type="button" aria-label="não era essa">
+                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           {/each}
         </div>
@@ -770,6 +909,52 @@
   {/if}
 
 </section>
+
+<!-- FEEDBACK: edit-code modal -->
+{#if editingDetected}
+  <div class="fixed inset-0 z-[80] bg-black/80 flex items-end sm:items-center justify-center"
+       onclick={closeEdit}>
+    <div class="w-full max-w-sm rounded-t-2xl sm:rounded-2xl bg-[#0a1230] p-5 space-y-3"
+         onclick={(e) => e.stopPropagation()}>
+      <div>
+        <h2 class="text-base font-semibold text-white">Corrigir código</h2>
+        <p class="text-xs text-ink-300 mt-1">
+          A IA leu como <strong class="mono text-flag-400">{editingDetected.sticker.code}</strong>. Qual é o código correto? Vai pro nosso dataset pra melhorar o modelo.
+        </p>
+      </div>
+      {#if editingDetected.bbox && imageUrl}
+        <div class="flex justify-center">
+          <BboxCrop imageUrl={imageUrl} bbox={editingDetected.bbox} size={96} scanning={false} />
+        </div>
+      {/if}
+      <input type="text"
+             bind:value={editValue}
+             autocapitalize="characters" spellcheck="false" autocomplete="off"
+             placeholder="ex: BRA17"
+             class="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-3 mono text-base text-ink-200 placeholder:text-ink-400/50 focus:outline-none focus:ring-2 focus:ring-gold-400/60" />
+      <div class="flex gap-2">
+        <button type="button" onclick={closeEdit}
+                class="flex-1 rounded-lg border border-white/10 py-2.5 text-sm text-ink-300">
+          cancelar
+        </button>
+        <button type="button" onclick={submitCorrection}
+                disabled={editSubmitting || !editValue.trim()}
+                class="flex-1 rounded-lg bg-gold-400 py-2.5 text-sm font-semibold text-[#050b1f] disabled:opacity-50">
+          {editSubmitting ? 'salvando…' : 'salvar correção'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Toast for feedback / corrections -->
+{#if toastMsg}
+  <div class="fixed top-[max(1rem,var(--safe-top))] left-1/2 -translate-x-1/2 z-[90]
+              rounded-full bg-pitch-500/95 text-white text-xs font-medium px-4 py-2
+              animate-[fadein_0.2s_ease-out] pointer-events-none">
+    {toastMsg}
+  </div>
+{/if}
 
 <!-- LIGHTBOX — top-level. Zoom uses real width sizing (not transform: scale)
      so the container's overflow-auto produces real scroll/pan in 2× and 3×. -->

@@ -49,6 +49,21 @@ export async function scanRegion(file, bbox) {
   });
 }
 
+/** Stable-ish hash of a File (size + name + lastModified) so multiple
+ *  feedback rows can be joined to the same photo without uploading bytes. */
+export function fileFingerprint(file) {
+  if (!file) return null;
+  return `${file.size}-${file.lastModified}-${file.name || 'photo'}`.slice(0, 128);
+}
+
+/** Send user feedback about a scan result.
+ *  kind: 'correction' | 'false_positive' | 'missed' */
+export async function postScanFeedback(payload) {
+  return request('/scan/feedback', {
+    method: 'POST', auth: true, body: payload,
+  });
+}
+
 import { API_BASE } from './client.js';
 import { auth } from '../stores/authState.svelte.js';
 
