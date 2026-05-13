@@ -1,6 +1,7 @@
 // Authentication / subscription state, persisted in localStorage.
 
-const KEY = 'figs.auth@v1';
+const KEY = 'figs.auth@v2';
+const LEGACY_KEY = 'figs.auth@v1';
 const DEVICE_KEY = 'figs.device_id';
 
 function loadDeviceId() {
@@ -14,25 +15,30 @@ function loadDeviceId() {
 
 function loadAuth() {
   try {
+    // v2 is the email-based model; v1 sessions are no longer usable.
+    if (localStorage.getItem(LEGACY_KEY)) localStorage.removeItem(LEGACY_KEY);
+
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { jwt: null, userId: null, validUntil: null, tier: null };
-    return { tier: null, ...JSON.parse(raw) };
+    if (!raw) return empty();
+    const parsed = JSON.parse(raw);
+    return { ...empty(), ...parsed };
   } catch {
-    return { jwt: null, userId: null, validUntil: null, tier: null };
+    return empty();
   }
+}
+
+function empty() {
+  return { jwt: null, userId: null, email: null, validUntil: null, tier: null };
 }
 
 const initial = loadAuth();
 
-// JWTs issued before the tier field was introduced are no longer trusted —
-// drop them so the user is prompted to re-redeem (same code is fine).
-const hasUsableSession = !!initial.jwt && !!initial.tier;
-
 export const auth = $state({
-  jwt: hasUsableSession ? initial.jwt : null,
-  userId: hasUsableSession ? initial.userId : null,
-  validUntil: hasUsableSession ? initial.validUntil : null,
-  tier: hasUsableSession ? initial.tier : null,
+  jwt: initial.jwt,
+  userId: initial.userId,
+  email: initial.email,
+  validUntil: initial.validUntil,
+  tier: initial.tier,
   deviceId: loadDeviceId(),
 });
 
@@ -41,6 +47,7 @@ $effect.root(() => {
     const persisted = {
       jwt: auth.jwt,
       userId: auth.userId,
+      email: auth.email,
       validUntil: auth.validUntil,
       tier: auth.tier,
     };
@@ -65,9 +72,10 @@ export function daysRemaining() {
   return Math.max(0, Math.ceil(ms / 86_400_000));
 }
 
-export function setAuth({ jwt, userId, validUntil, tier }) {
+export function setAuth({ jwt, userId, email, validUntil, tier }) {
   auth.jwt = jwt;
   auth.userId = userId;
+  auth.email = email ?? auth.email;
   auth.validUntil = validUntil;
   auth.tier = tier ?? null;
 }
@@ -77,6 +85,7 @@ export function clearAuth() {
   auth.userId = null;
   auth.validUntil = null;
   auth.tier = null;
+  // keep email so login form pre-fills with last used address
 }
 
 export function hasScan() {

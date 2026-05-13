@@ -59,6 +59,9 @@
             <div class="text-[11px] text-ink-300 mt-0.5">
               {isPro ? 'Catálogo + sync + scan automático' : 'Catálogo + sync (sem scan)'}
             </div>
+            {#if auth.email}
+              <div class="text-[10px] text-ink-400 mt-1 truncate">{auth.email}</div>
+            {/if}
           </div>
           <div class="text-right">
             <div class="num text-2xl text-white">{days}</div>
@@ -68,7 +71,7 @@
           </div>
         </div>
         <button type="button" onclick={clearAuth}
-                class="mt-3 text-[11px] text-ink-400 underline">sair (revogar acesso neste aparelho)</button>
+                class="mt-3 text-[11px] text-ink-400 underline">sair desse aparelho</button>
       </div>
     {/if}
 

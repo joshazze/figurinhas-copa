@@ -1,16 +1,45 @@
 import { request } from './client.js';
-import { auth, setAuth } from '../stores/authState.svelte.js';
+import { setAuth } from '../stores/authState.svelte.js';
 
-export async function redeem(code) {
-  const res = await request('/redeem', {
-    method: 'POST',
-    body: { code: code.trim().toUpperCase(), fingerprint: auth.deviceId },
-  });
+function applyAuthResponse(res) {
   setAuth({
     jwt: res.jwt,
     userId: res.user_id,
+    email: res.email,
     validUntil: res.valid_until,
     tier: res.tier,
   });
   return res;
+}
+
+export async function signup({ email, password, code }) {
+  const res = await request('/signup', {
+    method: 'POST',
+    body: {
+      email: email.trim().toLowerCase(),
+      password,
+      code: code.trim().toUpperCase(),
+    },
+  });
+  return applyAuthResponse(res);
+}
+
+export async function login({ email, password }) {
+  const res = await request('/login', {
+    method: 'POST',
+    body: { email: email.trim().toLowerCase(), password },
+  });
+  return applyAuthResponse(res);
+}
+
+export async function renew({ email, password, code }) {
+  const res = await request('/renew', {
+    method: 'POST',
+    body: {
+      email: email.trim().toLowerCase(),
+      password,
+      code: code.trim().toUpperCase(),
+    },
+  });
+  return applyAuthResponse(res);
 }
