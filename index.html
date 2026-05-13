@@ -31,14 +31,62 @@
       <div id="boot-fallback" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 24px;font-family:system-ui,-apple-system,sans-serif;text-align:center;">
         <div style="color:#fbbf24;font-size:48px;font-weight:700;letter-spacing:0.04em;line-height:1;">FIGS</div>
         <div style="color:#c1c9e3;font-size:11px;text-transform:uppercase;letter-spacing:0.3em;margin-top:6px;">cromos da copa 2026</div>
-        <div style="margin-top:32px;color:#9aa6cf;font-size:13px;">carregando o app...</div>
-        <div style="margin-top:48px;color:#7886b8;font-size:11px;line-height:1.6;max-width:280px;">
-          Travado nessa tela? Abra
-          <a href="./recover.html" style="color:#dde3f2;text-decoration:underline;">recover.html</a>
-          (limpa o cache) e tente de novo.
+        <div id="boot-spinner" style="margin-top:32px;color:#9aa6cf;font-size:13px;">carregando o app...</div>
+        <div id="boot-stuck" style="display:none;margin-top:24px;max-width:300px;">
+          <p style="color:#ef4444;font-size:13px;font-weight:600;">App não carregou.</p>
+          <p style="color:#c1c9e3;font-size:12px;margin-top:8px;line-height:1.5;">
+            Provavelmente o cache antigo do navegador. Toca o botão pra limpar e recarregar.
+          </p>
+          <button id="boot-reset" type="button"
+                  style="margin-top:16px;background:#fbbf24;color:#050b1f;border:0;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%;font-family:inherit;">
+            limpar cache e recarregar
+          </button>
+          <p id="boot-reset-status" style="margin-top:12px;color:#9aa6cf;font-size:11px;min-height:14px;"></p>
         </div>
       </div>
     </div>
+    <script>
+      // INLINE reset — does not depend on any module loading. After 6 seconds
+      // without a successful Svelte mount, we show the reset button so the
+      // user always has a way out of a stale-SW situation.
+      (function() {
+        var stuckTimer = setTimeout(function() {
+          var s = document.getElementById('boot-spinner');
+          var stuck = document.getElementById('boot-stuck');
+          if (s) s.style.display = 'none';
+          if (stuck) stuck.style.display = 'block';
+        }, 6000);
+        window.__figsBootDone = function() {
+          clearTimeout(stuckTimer);
+        };
+        var btn = document.getElementById('boot-reset');
+        var status = document.getElementById('boot-reset-status');
+        if (btn) {
+          btn.addEventListener('click', async function() {
+            btn.disabled = true;
+            status.textContent = 'limpando...';
+            try {
+              if ('serviceWorker' in navigator) {
+                var regs = await navigator.serviceWorker.getRegistrations();
+                for (var i = 0; i < regs.length; i++) { try { await regs[i].unregister(); } catch (e) {} }
+              }
+            } catch (e) {}
+            try {
+              if ('caches' in window) {
+                var keys = await caches.keys();
+                for (var i = 0; i < keys.length; i++) { try { await caches.delete(keys[i]); } catch (e) {} }
+              }
+            } catch (e) {}
+            try { localStorage.clear(); } catch (e) {}
+            try { sessionStorage.clear(); } catch (e) {}
+            status.textContent = 'pronto. recarregando...';
+            setTimeout(function() {
+              location.replace(location.pathname + '?reset=' + Date.now());
+            }, 800);
+          });
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

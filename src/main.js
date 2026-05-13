@@ -18,6 +18,11 @@ if ('serviceWorker' in navigator) {
 const target = document.getElementById('app');
 target.innerHTML = '';
 
+// Tell the inline-fallback's 6s stuck-timer that JS made it this far.
+if (typeof window !== 'undefined' && typeof window.__figsBootDone === 'function') {
+  window.__figsBootDone();
+}
+
 let app;
 try {
   app = mount(App, { target });
