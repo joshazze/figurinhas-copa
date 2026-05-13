@@ -45,12 +45,18 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Cache em runtime pros binarios grandes (ORT wasm 26MB, OCR chunk 10MB).
-        // Eles so sao baixados quando o user abre o Scan e ficam cacheados.
-        globPatterns: ['**/*.{css,html,svg,png,ico,webmanifest}'],
+        // Sem isso, SW novo fica preso em "waiting" ate todas as abas fecharem,
+        // e o user continua vendo o index.html cacheado apontando pra chunks JS
+        // que ja foram deletados no deploy seguinte.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        // JS PRECISA estar no precache — sem ele o SW serve index.html antigo
+        // apontando pra chunks que nao existem mais no servidor.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
         // Exclui chunks grandes do PWA precache (carregam por demanda)
         globIgnores: ['**/ort-*.{js,wasm}', '**/onnxruntime*', '**/ocr-engine-*.js'],
-        maximumFileSizeToCacheInBytes: 500 * 1024,    // 500KB pra precache estrito
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3MB cobre o bundle do app sem OCR
         // Permite que o build prossiga mesmo com chunks grandes
         // (eles aparecem no manifest pra runtime cache pegar)
         dontCacheBustURLsMatching: /\.(?:wasm|onnx)$/,
