@@ -30,11 +30,17 @@
   // 3.11.0 tap na tentative -> IA reanalisa a regiao com mais precisao (deep OCR focado)
   // 3.11.1 lightbox stacking fix (saiu de dentro da <section>, fundo 100% opaco)
   // 3.12.0 lightbox mantem markers/circles + upload 2400px (era 1600px) pra mais detalhe
-  const SCAN_VERSION = '3.12.0';
+  // 3.13.0 1 Detection por figurinha fisica (sem duplicar markers) + backend cap 2400
+  // 3.14.0 lightbox: zoom + tap em regiao manda crop pro /scan/region (resgate ad-hoc)
+  const SCAN_VERSION = '3.14.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
   let lightboxOpen = $state(false);
+  let lightboxZoom = $state(1);             // 1, 2, 3
+  let lightboxScanMode = $state(false);
+  let lightboxScanLoading = $state(false);
+  let lightboxScanError = $state('');
   let lastFile = $state(null);              // guarda o file pra reprocessar com Tesseract
   let ocrText = $state('');
   let ocrEngine = $state('');
@@ -111,20 +117,17 @@
     const sticker = stickerByCode[d.code] || mcStickerByCode[d.code];
     if (!sticker) return;
     const variant = d.code.startsWith('MC-') ? 'mc' : 'album';
-    const copies = Math.max(1, d.copies || 1);
-    const next = [...detected];
-    for (let k = 0; k < copies; k++) {
-      next.push({
-        id: `d${++_seq}`,
-        sticker, variant,
-        votes: d.status === 'verde' ? 6 : 2,
-        confirmed: d.status === 'verde',
-        confidence: d.confidence,
-        bbox: d.bbox || null,
-        status: d.status,
-      });
-    }
-    // sort live so cards keep stable order (verde first, then by code)
+    // Backend now emits ONE Detection per physical sticker — never multiply by
+    // copies here, or two same-code stickers in one frame would render four cards.
+    const next = [...detected, {
+      id: `d${++_seq}`,
+      sticker, variant,
+      votes: d.status === 'verde' ? 6 : 2,
+      confirmed: d.status === 'verde',
+      confidence: d.confidence,
+      bbox: d.bbox || null,
+      status: d.status,
+    }];
     next.sort((a, b) => {
       if (a.confirmed !== b.confirmed) return a.confirmed ? -1 : 1;
       return compareStickers(a.sticker, b.sticker);
@@ -145,6 +148,49 @@
 
   function setTentativeFlag(id, patch) {
     tentatives = tentatives.map((t) => t.id === id ? { ...t, ...patch } : t);
+  }
+
+  // Build a normalized bbox (4 corner points 0..1) around a single tap point.
+  function bboxAroundTap(clientX, clientY, rect, size = 0.10) {
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    const half = size / 2;
+    const cx = Math.max(half, Math.min(1 - half, x));
+    const cy = Math.max(half, Math.min(1 - half, y));
+    return [
+      [cx - half, cy - half],
+      [cx + half, cy - half],
+      [cx + half, cy + half],
+      [cx - half, cy + half],
+    ];
+  }
+
+  async function scrutinizeAdHocRegion(clientX, clientY, target) {
+    if (!lastFile) return;
+    const img = target.querySelector('img');
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      return; // tapped outside the photo
+    }
+    const bbox = bboxAroundTap(clientX, clientY, rect, 0.12);
+    lightboxScanError = '';
+    lightboxScanLoading = true;
+    try {
+      const res = await scanRegion(lastFile, bbox);
+      if (res?.matched && res.detection) {
+        addConfirmedDetection(res.detection);
+        lightboxScanMode = false;
+      } else {
+        lightboxScanError = 'nada identificado aqui';
+        setTimeout(() => { lightboxScanError = ''; }, 2500);
+      }
+    } catch (err) {
+      lightboxScanError = 'erro · tenta de novo';
+      setTimeout(() => { lightboxScanError = ''; }, 2500);
+    } finally {
+      lightboxScanLoading = false;
+    }
   }
 
   async function scrutinizeTentative(t) {
@@ -498,6 +544,9 @@
                              {d.confirmed ? 'bg-pitch-400 border-pitch-400 text-ink-950' : 'border-white/20 text-transparent'}"
                       aria-label="confirmar"
                       onclick={() => toggleConfirm(d.id)}>✓</button>
+              {#if d.bbox && imageUrl}
+                <BboxCrop imageUrl={imageUrl} bbox={d.bbox} size={40} scanning={false} />
+              {/if}
               <div class="flex-1 min-w-0">
                 <div class="display text-base font-bold text-white leading-none flex items-center gap-2">
                   <span>{d.variant === 'mc' ? `${d.sticker.team} 13 (MC)` : formatStickerLabel(d.sticker)}</span>
@@ -671,30 +720,73 @@
 
 </section>
 
-<!-- LIGHTBOX — TOP-LEVEL (outside the screen-enter <section>, otherwise fixed
-     anchors to the transformed ancestor and the lightbox renders half-screen). -->
+<!-- LIGHTBOX — top-level. Zoom 1/2/3× via toggle, tap-to-scrutinize lets the
+     user point at a sticker the AI missed and re-run OCR on that spot. -->
 {#if lightboxOpen && imageUrl}
   <div role="dialog" aria-modal="true"
-       class="fixed inset-0 z-[70] flex items-center justify-center bg-black"
-       onclick={() => (lightboxOpen = false)}>
-    <!-- ScanOverlay sizes itself off its <img>. imgClass constrains the img
-         to the viewport; the overlay's absolute children scale along with it. -->
-    <div onclick={(e) => e.stopPropagation()} style="line-height:0;">
-      <ScanOverlay imageUrl={imageUrl} scanning={false}
-                   imgClass="max-h-[92vh] max-w-[96vw] w-auto"
+       class="fixed inset-0 z-[70] flex items-center justify-center bg-black overflow-auto"
+       onclick={() => { if (!lightboxScanLoading) { lightboxOpen = false; lightboxScanMode = false; lightboxZoom = 1; } }}>
+    <!-- Photo wrapper: scaled by zoom level. Tap inside dispatches either
+         scrutinize (if scanMode) or stopPropagation (so close handler doesn't fire). -->
+    <div class="relative"
+         style="transform: scale({lightboxZoom}); transform-origin: center center; transition: transform 0.25s ease-out;"
+         onclick={(e) => {
+           e.stopPropagation();
+           if (lightboxScanMode && !lightboxScanLoading) {
+             scrutinizeAdHocRegion(e.clientX, e.clientY, e.currentTarget);
+           }
+         }}>
+      <ScanOverlay imageUrl={imageUrl} scanning={lightboxScanLoading}
+                   imgClass="max-h-[92vh] max-w-[96vw] w-auto {lightboxScanMode ? 'cursor-crosshair' : ''}"
                    bboxes={[
                      ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
                      ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
                    ]} />
     </div>
+
+    <!-- TOP RIGHT: close -->
     <button type="button" aria-label="fechar"
-            onclick={() => (lightboxOpen = false)}
+            onclick={(e) => { e.stopPropagation(); lightboxOpen = false; lightboxScanMode = false; lightboxZoom = 1; }}
             class="fixed top-[max(0.75rem,var(--safe-top))] right-3 grid place-items-center
                    h-10 w-10 rounded-full bg-white/15 text-white border border-white/25
-                   active:scale-95 transition"
+                   active:scale-95 transition z-[71]"
             style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
       <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
+
+    <!-- TOP LEFT: zoom toggle (1× / 2× / 3×) -->
+    <button type="button"
+            onclick={(e) => { e.stopPropagation(); lightboxZoom = lightboxZoom >= 3 ? 1 : lightboxZoom + 1; }}
+            class="fixed top-[max(0.75rem,var(--safe-top))] left-3 grid place-items-center
+                   h-10 px-3 rounded-full bg-white/15 text-white border border-white/25 text-xs font-bold
+                   active:scale-95 transition z-[71]"
+            style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+      {lightboxZoom}×
+    </button>
+
+    <!-- BOTTOM CENTER: scan-mode toggle + feedback -->
+    <div class="fixed bottom-[max(1rem,var(--safe-bottom))] left-1/2 -translate-x-1/2 z-[71] flex flex-col items-center gap-2 pointer-events-none">
+      {#if lightboxScanError}
+        <span class="rounded-full bg-flag-500/90 text-white text-xs font-medium px-3 py-1.5 pointer-events-auto">
+          {lightboxScanError}
+        </span>
+      {/if}
+      {#if lightboxScanLoading}
+        <span class="rounded-full bg-pitch-500/90 text-white text-xs font-medium px-3 py-1.5 pointer-events-auto">
+          analisando região…
+        </span>
+      {:else}
+        <button type="button"
+                onclick={(e) => { e.stopPropagation(); lightboxScanMode = !lightboxScanMode; lightboxScanError = ''; }}
+                class="rounded-full px-4 py-2 text-xs font-medium border transition pointer-events-auto
+                       {lightboxScanMode
+                         ? 'bg-pitch-500 text-white border-pitch-500'
+                         : 'bg-white/15 text-white border-white/25'}"
+                style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+          {lightboxScanMode ? 'toca numa figurinha que faltou' : '✨ marcar região manual'}
+        </button>
+      {/if}
+    </div>
   </div>
 {/if}
