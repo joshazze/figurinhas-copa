@@ -24,8 +24,21 @@
     />
     <title>Figs · Copa 2026 · USA · Canadá · México</title>
   </head>
-  <body>
-    <div id="app"></div>
+  <body style="background:#050b1f;color:#dde3f2;margin:0;">
+    <div id="app">
+      <!-- Static fallback. If the JS fails to load (stale SW cache, broken bundle, network)
+           the user still sees the wordmark + a way out. The Svelte mount() replaces this. -->
+      <div id="boot-fallback" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 24px;font-family:system-ui,-apple-system,sans-serif;text-align:center;">
+        <div style="color:#fbbf24;font-size:48px;font-weight:700;letter-spacing:0.04em;line-height:1;">FIGS</div>
+        <div style="color:#c1c9e3;font-size:11px;text-transform:uppercase;letter-spacing:0.3em;margin-top:6px;">cromos da copa 2026</div>
+        <div style="margin-top:32px;color:#9aa6cf;font-size:13px;">carregando o app...</div>
+        <div style="margin-top:48px;color:#7886b8;font-size:11px;line-height:1.6;max-width:280px;">
+          Travado nessa tela? Abra
+          <a href="./recover.html" style="color:#dde3f2;text-decoration:underline;">recover.html</a>
+          (limpa o cache) e tente de novo.
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
