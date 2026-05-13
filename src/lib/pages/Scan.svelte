@@ -39,7 +39,8 @@
   //                  + false_positives viram blacklist · botoes editar/excluir lado a lado
   // 3.16.0 seal detector: balao verde como pre-detector. OCR so nos balões = sem dupes
   //                       + latencia 5-10x menor + precisao maior
-  const SCAN_VERSION = '3.16.0';
+  // 3.16.1 brackets HUD maiores (18px) + cantos arredondados + glow inset
+  const SCAN_VERSION = '3.16.1';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
