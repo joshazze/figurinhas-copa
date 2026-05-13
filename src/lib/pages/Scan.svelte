@@ -40,7 +40,8 @@
   // 3.16.0 seal detector: balao verde como pre-detector. OCR so nos balões = sem dupes
   //                       + latencia 5-10x menor + precisao maior
   // 3.16.1 brackets HUD maiores (18px) + cantos arredondados + glow inset
-  const SCAN_VERSION = '3.16.1';
+  // 3.16.2 card-detector backend + UI mostra bboxes 'candidate' (cinza) durante scan
+  const SCAN_VERSION = '3.16.2';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -67,6 +68,9 @@
   let detected = $state([]);
   // tentatives: [{ id, raw_text, bbox, confidence }]
   let tentatives = $state([]);
+  // candidates: bboxes emitted by the card-detector before OCR confirms text.
+  // [{ id, bbox: [[x,y],...] in 0..1 }]
+  let candidates = $state([]);
   let manualInput = $state('');
 
   // Destination
@@ -89,6 +93,7 @@
     errorMsg = '';
     detected = [];
     tentatives = [];
+    candidates = [];
     manualInput = '';
     destination = null;
     person = '';
@@ -270,6 +275,15 @@
   }
 
   // Build a normalized bbox (4 corner points 0..1) around a single tap point.
+  // Centroid distance between two normalized bboxes — used to hide candidate
+  // outlines once a real detection lands in roughly the same spot.
+  function bboxCenterDist(a, b) {
+    if (!a || !b) return Infinity;
+    const cx = (arr) => arr.reduce((s, p) => s + p[0], 0) / arr.length;
+    const cy = (arr) => arr.reduce((s, p) => s + p[1], 0) / arr.length;
+    return Math.hypot(cx(a) - cx(b), cy(a) - cy(b));
+  }
+
   function bboxAroundTap(clientX, clientY, rect, size = 0.10) {
     const x = (clientX - rect.left) / rect.width;
     const y = (clientY - rect.top) / rect.height;
@@ -388,12 +402,17 @@
     ocrDebug = null;
     detected = [];
     tentatives = [];
+    candidates = [];
     try {
       phase = 'ocr';
       const final = await scanStream(file, (event) => {
         if (event.type === 'progress') {
           phasePercent = event.pct;
           phaseLabel = event.label;
+        } else if (event.type === 'candidate' && event.bbox) {
+          // Card detector saw a sticker rectangle. Show it as an outline
+          // while the OCR works on it.
+          candidates = [...candidates, { id: `c${++_seq}`, bbox: event.bbox }];
         } else if (event.type === 'detection' && event.code) {
           addConfirmedDetection(event);
         } else if (event.type === 'tentative') {
@@ -588,6 +607,9 @@
         {#if imageUrl}
           <ScanOverlay imageUrl={imageUrl} scanning={true}
                        bboxes={[
+                         ...candidates.filter((c) => !detected.some((d) =>
+                           d.bbox && bboxCenterDist(d.bbox, c.bbox) < 0.06))
+                                     .map((c) => ({ id: c.id, bbox: c.bbox, status: 'candidate' })),
                          ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
                          ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
                        ]} />

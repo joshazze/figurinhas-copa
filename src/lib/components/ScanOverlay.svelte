@@ -45,6 +45,7 @@
   function bboxColor(status) {
     if (status === 'verde') return 'rgb(34 197 94)';     // pitch
     if (status === 'amarelo') return 'rgb(251 191 36)';  // gold
+    if (status === 'candidate') return 'rgb(148 163 184)'; // slate (pre-OCR outline)
     return 'rgb(251 191 36)';                            // tentative = gold too
   }
 </script>
@@ -75,6 +76,9 @@
         <div class="tentative-circle"></div>
         <div class="tentative-q">?</div>
       </div>
+    {:else if b.status === 'candidate'}
+      <div class="absolute pointer-events-none candidate-mark animate-[fadein_0.2s_ease-out]"
+           style="left:{r.left};top:{r.top};width:{r.width};height:{r.height};"></div>
     {:else}
       <div class="absolute pointer-events-none bbox-mark animate-[fadein_0.25s_ease-out]"
            style="left:{r.left};top:{r.top};width:{r.width};height:{r.height};
@@ -176,5 +180,19 @@
   @keyframes tent-pulse {
     0%,100% { transform: scale(1);   opacity: 0.95; }
     50%     { transform: scale(1.08); opacity: 0.55; }
+  }
+
+  /* Candidate: a thin dashed outline shown the moment the card detector
+     finds a sticker rectangle. Replaced by the verde/amarelo brackets
+     once the OCR confirms the code inside. */
+  .candidate-mark {
+    border: 2px dashed rgba(148, 163, 184, 0.85);
+    box-shadow: 0 0 6px rgba(148, 163, 184, 0.45);
+    border-radius: 6px;
+    animation: candidate-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes candidate-pulse {
+    0%,100% { opacity: 0.85; }
+    50%     { opacity: 0.45; }
   }
 </style>
