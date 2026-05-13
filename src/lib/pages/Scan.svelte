@@ -29,7 +29,8 @@
   // 3.10.0 scanner futurista navega foto + confirmadas com foto crop + tentatives circuladas na foto
   // 3.11.0 tap na tentative -> IA reanalisa a regiao com mais precisao (deep OCR focado)
   // 3.11.1 lightbox stacking fix (saiu de dentro da <section>, fundo 100% opaco)
-  const SCAN_VERSION = '3.11.1';
+  // 3.12.0 lightbox mantem markers/circles + upload 2400px (era 1600px) pra mais detalhe
+  const SCAN_VERSION = '3.12.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -670,16 +671,22 @@
 
 </section>
 
-<!-- LIGHTBOX da foto processada — TOP-LEVEL (fora da <section> com screen-enter
-     transform; fixed inside a transformed ancestor anchors to that ancestor
-     instead of the viewport, which is what was causing the half-screen bug). -->
+<!-- LIGHTBOX — TOP-LEVEL (outside the screen-enter <section>, otherwise fixed
+     anchors to the transformed ancestor and the lightbox renders half-screen). -->
 {#if lightboxOpen && imageUrl}
   <div role="dialog" aria-modal="true"
        class="fixed inset-0 z-[70] flex items-center justify-center bg-black"
        onclick={() => (lightboxOpen = false)}>
-    <img src={imageUrl} alt="foto ampliada"
-         class="max-h-[92vh] max-w-[96vw] object-contain select-none"
-         onclick={(e) => e.stopPropagation()} />
+    <!-- ScanOverlay sizes itself off its <img>. imgClass constrains the img
+         to the viewport; the overlay's absolute children scale along with it. -->
+    <div onclick={(e) => e.stopPropagation()} style="line-height:0;">
+      <ScanOverlay imageUrl={imageUrl} scanning={false}
+                   imgClass="max-h-[92vh] max-w-[96vw] w-auto"
+                   bboxes={[
+                     ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
+                     ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
+                   ]} />
+    </div>
     <button type="button" aria-label="fechar"
             onclick={() => (lightboxOpen = false)}
             class="fixed top-[max(0.75rem,var(--safe-top))] right-3 grid place-items-center

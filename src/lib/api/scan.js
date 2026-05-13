@@ -3,8 +3,12 @@
 
 import { request } from './client.js';
 
-const MAX_DIMENSION = 1600;
-const JPEG_QUALITY = 0.85;
+// Bumped 1600 → 2400. Codes that were ~22px tall at 1600 become ~33px at 2400,
+// which sits comfortably above RapidOCR's recognition floor. Backend caps at
+// 12MB after base64 — 2400px JPEG q=0.85 of a busy frame is ~600-900KB, well
+// inside the budget.
+const MAX_DIMENSION = 2400;
+const JPEG_QUALITY = 0.88;
 
 async function compressToBase64(file) {
   const blobUrl = URL.createObjectURL(file);
