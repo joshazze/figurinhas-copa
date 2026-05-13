@@ -43,3 +43,11 @@ export async function renew({ email, password, code }) {
   });
   return applyAuthResponse(res);
 }
+
+export async function changePassword({ oldPassword, newPassword }) {
+  return request('/change-password', {
+    method: 'POST',
+    auth: true,
+    body: { old_password: oldPassword, new_password: newPassword },
+  });
+}
