@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import BottomNav from './lib/components/BottomNav.svelte';
   import ActivationGate from './lib/components/ActivationGate.svelte';
+  import RenewModal from './lib/components/RenewModal.svelte';
   import Home from './lib/pages/Home.svelte';
   import Album from './lib/pages/Album.svelte';
   import Duplicates from './lib/pages/Duplicates.svelte';
@@ -60,3 +61,4 @@
 {/if}
 
 <ActivationGate />
+<RenewModal />

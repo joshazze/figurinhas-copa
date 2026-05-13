@@ -8,6 +8,7 @@
     commitmentsByType, lookupSticker
   } from '../stores/derived.svelte.js';
   import { appState, fulfillExpect, fulfillGive } from '../stores/appState.svelte.js';
+  import { daysRemaining, openRenewModal } from '../stores/authState.svelte.js';
   import { formatStickerLabel } from '../utils/format.js';
   import { isNative } from '../utils/ocr.js';
 
@@ -76,6 +77,19 @@
 </script>
 
 <section class="screen-enter pb-32">
+  {#if daysRemaining() > 0 && daysRemaining() <= 7}
+    <div class="mx-3 mt-3 flex items-center gap-3 rounded-xl border border-gold-500/30 bg-gold-500/10 px-3 py-2">
+      <div class="flex-1 text-xs leading-tight text-ink-200">
+        <strong class="text-gold-400">{daysRemaining()} {daysRemaining() === 1 ? 'dia' : 'dias'} restantes</strong>
+        <div class="text-ink-300">Renove antes que expire pra não perder o scan.</div>
+      </div>
+      <button type="button" onclick={openRenewModal}
+              class="rounded-lg bg-gold-500 px-3 py-1.5 text-xs font-medium text-[#050b1f] active:scale-[0.98]">
+        renovar
+      </button>
+    </div>
+  {/if}
+
   <!-- Header sport-tv: wordmark FIGS + tagline curta + tricolor stripe -->
   <header class="px-5 pt-[max(1rem,calc(var(--safe-top)+0.5rem))] pb-3">
     <div class="flex items-baseline justify-between gap-3">
