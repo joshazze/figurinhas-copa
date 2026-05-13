@@ -32,7 +32,9 @@
   // 3.12.0 lightbox mantem markers/circles + upload 2400px (era 1600px) pra mais detalhe
   // 3.13.0 1 Detection por figurinha fisica (sem duplicar markers) + backend cap 2400
   // 3.14.0 lightbox: zoom + tap em regiao manda crop pro /scan/region (resgate ad-hoc)
-  const SCAN_VERSION = '3.14.0';
+  // 3.15.0 lightbox: zoom com pan/scroll real + marcar varias areas e analisar em batch
+  // 3.16.0 precisao: cutoff 92->94, len delta 2->1, ocr_conf >= 0.88 pra non-exact match
+  const SCAN_VERSION = '3.16.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -41,6 +43,11 @@
   let lightboxScanMode = $state(false);
   let lightboxScanLoading = $state(false);
   let lightboxScanError = $state('');
+  // pendingMarks: tap points the user added in scan-mode but hasn't analyzed yet.
+  // [{id, bbox: [[x,y]...] in 0..1, status: 'pending'|'loading'|'done'|'failed'}]
+  let pendingMarks = $state([]);
+  let _markSeq = 0;
+  let lightboxBatchProgress = $state(null);  // {done, total} when batch running
   let lastFile = $state(null);              // guarda o file pra reprocessar com Tesseract
   let ocrText = $state('');
   let ocrEngine = $state('');
@@ -165,31 +172,74 @@
     ];
   }
 
-  async function scrutinizeAdHocRegion(clientX, clientY, target) {
-    if (!lastFile) return;
+  // Add a mark at the tapped position. Doesn't analyze yet — user may
+  // tap several places before hitting "analisar N marcadas".
+  function addMark(clientX, clientY, target) {
     const img = target.querySelector('img');
     if (!img) return;
     const rect = img.getBoundingClientRect();
     if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-      return; // tapped outside the photo
+      return;
     }
     const bbox = bboxAroundTap(clientX, clientY, rect, 0.12);
+    pendingMarks = [...pendingMarks, {
+      id: `m${++_markSeq}`,
+      bbox,
+      status: 'pending',
+    }];
+  }
+
+  function removeMark(id) {
+    pendingMarks = pendingMarks.filter((m) => m.id !== id);
+  }
+
+  function clearMarks() {
+    pendingMarks = [];
+  }
+
+  function setMarkStatus(id, status) {
+    pendingMarks = pendingMarks.map((m) => m.id === id ? { ...m, status } : m);
+  }
+
+  async function analyzePendingMarks() {
+    if (!lastFile || pendingMarks.length === 0 || lightboxScanLoading) return;
     lightboxScanError = '';
     lightboxScanLoading = true;
-    try {
-      const res = await scanRegion(lastFile, bbox);
-      if (res?.matched && res.detection) {
-        addConfirmedDetection(res.detection);
-        lightboxScanMode = false;
-      } else {
-        lightboxScanError = 'nada identificado aqui';
-        setTimeout(() => { lightboxScanError = ''; }, 2500);
+    lightboxBatchProgress = { done: 0, total: pendingMarks.length };
+    let identifiedCount = 0;
+    let failedCount = 0;
+    const marks = [...pendingMarks];
+    for (const mark of marks) {
+      setMarkStatus(mark.id, 'loading');
+      try {
+        const res = await scanRegion(lastFile, mark.bbox);
+        if (res?.matched && res.detection) {
+          addConfirmedDetection(res.detection);
+          setMarkStatus(mark.id, 'done');
+          identifiedCount++;
+        } else {
+          setMarkStatus(mark.id, 'failed');
+          failedCount++;
+        }
+      } catch {
+        setMarkStatus(mark.id, 'failed');
+        failedCount++;
       }
-    } catch (err) {
-      lightboxScanError = 'erro · tenta de novo';
-      setTimeout(() => { lightboxScanError = ''; }, 2500);
-    } finally {
-      lightboxScanLoading = false;
+      lightboxBatchProgress = { done: lightboxBatchProgress.done + 1, total: marks.length };
+    }
+    lightboxScanLoading = false;
+    lightboxBatchProgress = null;
+    // Keep failed marks visible (so user knows which didn't work). Auto-prune
+    // the successful ones after 1.5s.
+    setTimeout(() => {
+      pendingMarks = pendingMarks.filter((m) => m.status !== 'done');
+    }, 1500);
+    if (identifiedCount > 0 && failedCount === 0) {
+      lightboxScanMode = false;
+    }
+    if (identifiedCount === 0 && failedCount > 0) {
+      lightboxScanError = `${failedCount === 1 ? 'nada identificado' : `nenhuma das ${failedCount} foi identificada`}`;
+      setTimeout(() => { lightboxScanError = ''; }, 3000);
     }
   }
 
@@ -720,33 +770,62 @@
 
 </section>
 
-<!-- LIGHTBOX — top-level. Zoom 1/2/3× via toggle, tap-to-scrutinize lets the
-     user point at a sticker the AI missed and re-run OCR on that spot. -->
+<!-- LIGHTBOX — top-level. Zoom uses real width sizing (not transform: scale)
+     so the container's overflow-auto produces real scroll/pan in 2× and 3×. -->
 {#if lightboxOpen && imageUrl}
   <div role="dialog" aria-modal="true"
-       class="fixed inset-0 z-[70] flex items-center justify-center bg-black overflow-auto"
-       onclick={() => { if (!lightboxScanLoading) { lightboxOpen = false; lightboxScanMode = false; lightboxZoom = 1; } }}>
-    <!-- Photo wrapper: scaled by zoom level. Tap inside dispatches either
-         scrutinize (if scanMode) or stopPropagation (so close handler doesn't fire). -->
-    <div class="relative"
-         style="transform: scale({lightboxZoom}); transform-origin: center center; transition: transform 0.25s ease-out;"
+       class="fixed inset-0 z-[70] bg-black overflow-auto"
+       onclick={() => {
+         if (lightboxScanLoading) return;
+         if (lightboxScanMode || pendingMarks.length > 0) return; // don't close mid-marking
+         lightboxOpen = false; lightboxZoom = 1;
+       }}>
+    <!-- Photo wrapper grows with zoom (100/200/300 vw) so overflow-auto pans
+         naturally. Tap inside adds a pending mark when in scan mode. -->
+    <div class="min-h-dvh flex items-center justify-center"
+         style="width:{lightboxZoom * 100}vw;"
          onclick={(e) => {
            e.stopPropagation();
            if (lightboxScanMode && !lightboxScanLoading) {
-             scrutinizeAdHocRegion(e.clientX, e.clientY, e.currentTarget);
+             addMark(e.clientX, e.clientY, e.currentTarget);
            }
          }}>
-      <ScanOverlay imageUrl={imageUrl} scanning={lightboxScanLoading}
-                   imgClass="max-h-[92vh] max-w-[96vw] w-auto {lightboxScanMode ? 'cursor-crosshair' : ''}"
-                   bboxes={[
-                     ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
-                     ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
-                   ]} />
+      <div class="relative" style="line-height:0;">
+        <ScanOverlay imageUrl={imageUrl} scanning={false}
+                     imgClass="w-full h-auto {lightboxScanMode ? 'cursor-crosshair' : ''}"
+                     bboxes={[
+                       ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
+                       ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
+                     ]} />
+        <!-- Pending tap marks overlay (user marked, not yet analyzed) -->
+        {#each pendingMarks as m (m.id)}
+          {@const xs = m.bbox.map((p) => p[0])}
+          {@const ys = m.bbox.map((p) => p[1])}
+          {@const x0 = Math.min(...xs)}
+          {@const y0 = Math.min(...ys)}
+          {@const w = Math.max(...xs) - x0}
+          {@const h = Math.max(...ys) - y0}
+          <div class="absolute pointer-events-none flex items-center justify-center
+                      animate-[fadein_0.2s_ease-out]"
+               style="left:{x0*100}%;top:{y0*100}%;width:{w*100}%;height:{h*100}%;">
+            <div class="absolute inset-0 rounded-full border-2
+                        {m.status === 'loading' ? 'border-gold-400 animate-pulse'
+                          : m.status === 'done' ? 'border-pitch-400'
+                          : m.status === 'failed' ? 'border-flag-500 border-dashed'
+                          : 'border-sky26-400 border-dashed'}"
+                 style="box-shadow: 0 0 8px currentColor;"></div>
+            <span class="relative text-xs font-bold text-white drop-shadow-lg"
+                  style="text-shadow: 0 0 4px black;">
+              {m.status === 'loading' ? '…' : m.status === 'done' ? '✓' : m.status === 'failed' ? '✗' : '+'}
+            </span>
+          </div>
+        {/each}
+      </div>
     </div>
 
     <!-- TOP RIGHT: close -->
     <button type="button" aria-label="fechar"
-            onclick={(e) => { e.stopPropagation(); lightboxOpen = false; lightboxScanMode = false; lightboxZoom = 1; }}
+            onclick={(e) => { e.stopPropagation(); lightboxOpen = false; lightboxScanMode = false; lightboxZoom = 1; clearMarks(); }}
             class="fixed top-[max(0.75rem,var(--safe-top))] right-3 grid place-items-center
                    h-10 w-10 rounded-full bg-white/15 text-white border border-white/25
                    active:scale-95 transition z-[71]"
@@ -755,7 +834,7 @@
            stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
 
-    <!-- TOP LEFT: zoom toggle (1× / 2× / 3×) -->
+    <!-- TOP LEFT: zoom toggle -->
     <button type="button"
             onclick={(e) => { e.stopPropagation(); lightboxZoom = lightboxZoom >= 3 ? 1 : lightboxZoom + 1; }}
             class="fixed top-[max(0.75rem,var(--safe-top))] left-3 grid place-items-center
@@ -765,26 +844,57 @@
       {lightboxZoom}×
     </button>
 
-    <!-- BOTTOM CENTER: scan-mode toggle + feedback -->
-    <div class="fixed bottom-[max(1rem,var(--safe-bottom))] left-1/2 -translate-x-1/2 z-[71] flex flex-col items-center gap-2 pointer-events-none">
+    <!-- BOTTOM: scan-mode toggle + batch analyze -->
+    <div class="fixed bottom-[max(1rem,var(--safe-bottom))] left-1/2 -translate-x-1/2 z-[71]
+                flex flex-col items-center gap-2 pointer-events-none w-full max-w-sm px-4">
       {#if lightboxScanError}
         <span class="rounded-full bg-flag-500/90 text-white text-xs font-medium px-3 py-1.5 pointer-events-auto">
           {lightboxScanError}
         </span>
       {/if}
-      {#if lightboxScanLoading}
+      {#if lightboxScanLoading && lightboxBatchProgress}
         <span class="rounded-full bg-pitch-500/90 text-white text-xs font-medium px-3 py-1.5 pointer-events-auto">
-          analisando região…
+          analisando {lightboxBatchProgress.done + 1} de {lightboxBatchProgress.total}…
         </span>
+      {:else if lightboxScanMode}
+        <div class="flex items-center gap-2 pointer-events-auto">
+          {#if pendingMarks.length > 0}
+            <button type="button"
+                    onclick={(e) => { e.stopPropagation(); analyzePendingMarks(); }}
+                    class="rounded-full px-4 py-2 text-xs font-semibold bg-gold-400 text-[#050b1f]
+                           active:scale-95 transition">
+              ✨ analisar {pendingMarks.length} {pendingMarks.length === 1 ? 'marcada' : 'marcadas'}
+            </button>
+            <button type="button"
+                    onclick={(e) => { e.stopPropagation(); clearMarks(); }}
+                    class="rounded-full h-10 w-10 grid place-items-center bg-white/15 text-white
+                           border border-white/25 active:scale-95 transition"
+                    style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);"
+                    aria-label="limpar marcações">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          {:else}
+            <button type="button"
+                    onclick={(e) => { e.stopPropagation(); lightboxScanMode = false; }}
+                    class="rounded-full px-4 py-2 text-xs font-medium bg-sky26-500 text-white
+                           border border-sky26-400 active:scale-95 transition">
+              toca onde a IA esqueceu — sair
+            </button>
+          {/if}
+        </div>
+        {#if pendingMarks.length === 0}
+          <p class="text-[11px] text-ink-300 text-center pointer-events-none">
+            toca em quantas regiões quiser, depois analisa todas de uma vez
+          </p>
+        {/if}
       {:else}
         <button type="button"
-                onclick={(e) => { e.stopPropagation(); lightboxScanMode = !lightboxScanMode; lightboxScanError = ''; }}
+                onclick={(e) => { e.stopPropagation(); lightboxScanMode = true; lightboxScanError = ''; }}
                 class="rounded-full px-4 py-2 text-xs font-medium border transition pointer-events-auto
-                       {lightboxScanMode
-                         ? 'bg-pitch-500 text-white border-pitch-500'
-                         : 'bg-white/15 text-white border-white/25'}"
+                       bg-white/15 text-white border-white/25"
                 style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
-          {lightboxScanMode ? 'toca numa figurinha que faltou' : '✨ marcar região manual'}
+          ✨ marcar regiões manualmente
         </button>
       {/if}
     </div>
