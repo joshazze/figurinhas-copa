@@ -43,9 +43,15 @@
   // 3.16.2 card-detector backend + UI mostra bboxes 'candidate' (cinza) durante scan
   // 3.16.3 removido card-detector como gatekeeper (falha em white bg / cascade);
   //        dedup agora por IoU bbox OR centroid distance — funciona em qualquer cenario
-  // 3.16.4 dedup agressiva: IoU 0.05 + mostly-contained + skip halves (-30% latency) (falha em white bg / cascade);
-  //        dedup agora por IoU bbox OR centroid distance — funciona em qualquer cenario
-  const SCAN_VERSION = '3.16.4';
+  // 3.16.4 dedup agressiva: IoU 0.05 + mostly-contained + skip halves (-30% latency)
+  // 3.16.5 NMS espacial via exclusion zones (carve zona ao redor de cada hit) + fix scrutiny NameError
+  // 3.16.6 matchers melhores: confusion-aware scorer (O/0 I/1 S/5 B/8 etc), prefix+suffix two-stage,
+  //        negative-learned blacklist, image-hash cache anti-retap, warmup engine no startup
+  // 4.0.0  UX overhaul: drag-to-draw rectangles no lightbox manual (era tap circle),
+  //        HUD enriquecido (2 reticles, scan-line horizontal+vertical, ring glow, phase bar),
+  //        animacao bbox-arrive cinematografica (scale+sweep+pulse), tabs de review,
+  //        cards de detection com deep-scan reveal
+  const SCAN_VERSION = '4.0.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -59,6 +65,9 @@
   let pendingMarks = $state([]);
   let _markSeq = 0;
   let lightboxBatchProgress = $state(null);  // {done, total} when batch running
+  // Drag-to-draw state for manual rectangle selection in the lightbox.
+  // Stores normalized 0..1 image-relative coords for both endpoints.
+  let dragState = $state(null);  // {startX, startY, currentX, currentY, rect} | null
   let lastFile = $state(null);              // guarda o file pra reprocessar com Tesseract
   let ocrText = $state('');
   let ocrEngine = $state('');
@@ -288,35 +297,85 @@
     return Math.hypot(cx(a) - cx(b), cy(a) - cy(b));
   }
 
-  function bboxAroundTap(clientX, clientY, rect, size = 0.10) {
-    const x = (clientX - rect.left) / rect.width;
-    const y = (clientY - rect.top) / rect.height;
-    const half = size / 2;
-    const cx = Math.max(half, Math.min(1 - half, x));
-    const cy = Math.max(half, Math.min(1 - half, y));
-    return [
-      [cx - half, cy - half],
-      [cx + half, cy - half],
-      [cx + half, cy + half],
-      [cx - half, cy + half],
-    ];
+  // Build a 4-corner normalized bbox from two opposite points (start, end).
+  // Caps each dimension at 6%–60% of frame to keep rectangles useful.
+  function bboxFromDrag(sx, sy, ex, ey) {
+    const x0 = Math.max(0, Math.min(sx, ex));
+    const y0 = Math.max(0, Math.min(sy, ey));
+    const x1 = Math.min(1, Math.max(sx, ex));
+    const y1 = Math.min(1, Math.max(sy, ey));
+    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
   }
 
-  // Add a mark at the tapped position. Doesn't analyze yet — user may
-  // tap several places before hitting "analisar N marcadas".
-  function addMark(clientX, clientY, target) {
-    const img = target.querySelector('img');
-    if (!img) return;
+  // Returns normalized (0..1) image coords from a pointer event.
+  function pointerToNorm(clientX, clientY, img) {
     const rect = img.getBoundingClientRect();
-    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-      return;
+    return {
+      x: (clientX - rect.left) / rect.width,
+      y: (clientY - rect.top) / rect.height,
+      inside: clientX >= rect.left && clientX <= rect.right
+              && clientY >= rect.top && clientY <= rect.bottom,
+    };
+  }
+
+  function getLightboxImg() {
+    return document.querySelector('.lightbox-photo-img');
+  }
+
+  function onMarkPointerDown(e) {
+    if (!lightboxScanMode || lightboxScanLoading) return;
+    const img = getLightboxImg();
+    if (!img) return;
+    const p = pointerToNorm(e.clientX, e.clientY, img);
+    if (!p.inside) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragState = { startX: p.x, startY: p.y, currentX: p.x, currentY: p.y };
+    if (e.pointerId !== undefined && e.target?.setPointerCapture) {
+      try { e.target.setPointerCapture(e.pointerId); } catch {}
     }
-    const bbox = bboxAroundTap(clientX, clientY, rect, 0.12);
+  }
+
+  function onMarkPointerMove(e) {
+    if (!dragState) return;
+    const img = getLightboxImg();
+    if (!img) return;
+    const p = pointerToNorm(e.clientX, e.clientY, img);
+    dragState = {
+      ...dragState,
+      currentX: Math.max(0, Math.min(1, p.x)),
+      currentY: Math.max(0, Math.min(1, p.y)),
+    };
+  }
+
+  function onMarkPointerUp(e) {
+    if (!dragState) return;
+    const dx = Math.abs(dragState.currentX - dragState.startX);
+    const dy = Math.abs(dragState.currentY - dragState.startY);
+    // If user barely moved, treat as a tap → fixed 14% square around the point.
+    // Otherwise use the actual rectangle they drew (minimum 4% per side).
+    let bbox;
+    if (dx < 0.02 && dy < 0.02) {
+      const half = 0.07;
+      const cx = Math.max(half, Math.min(1 - half, dragState.startX));
+      const cy = Math.max(half, Math.min(1 - half, dragState.startY));
+      bbox = bboxFromDrag(cx - half, cy - half, cx + half, cy + half);
+    } else {
+      bbox = bboxFromDrag(
+        dragState.startX, dragState.startY,
+        dragState.currentX, dragState.currentY,
+      );
+    }
     pendingMarks = [...pendingMarks, {
       id: `m${++_markSeq}`,
       bbox,
       status: 'pending',
     }];
+    dragState = null;
+  }
+
+  function onMarkPointerCancel() {
+    dragState = null;
   }
 
   function removeMark(id) {
@@ -1003,45 +1062,71 @@
          lightboxOpen = false; lightboxZoom = 1;
        }}>
     <!-- Photo wrapper grows with zoom (100/200/300 vw) so overflow-auto pans
-         naturally. Tap inside adds a pending mark when in scan mode. -->
+         naturally. In scan mode the user DRAGS to draw a rectangle over the
+         sticker code instead of tapping a point. -->
     <div class="min-h-dvh flex items-center justify-center"
          style="width:{lightboxZoom * 100}vw;"
-         onclick={(e) => {
-           e.stopPropagation();
-           if (lightboxScanMode && !lightboxScanLoading) {
-             addMark(e.clientX, e.clientY, e.currentTarget);
-           }
-         }}>
+         onclick={(e) => { e.stopPropagation(); }}>
       <div class="relative" style="line-height:0;">
-        <ScanOverlay imageUrl={imageUrl} scanning={false}
-                     imgClass="w-full h-auto {lightboxScanMode ? 'cursor-crosshair' : ''}"
-                     bboxes={[
-                       ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
-                       ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
-                     ]} />
-        <!-- Pending tap marks overlay (user marked, not yet analyzed) -->
-        {#each pendingMarks as m (m.id)}
-          {@const xs = m.bbox.map((p) => p[0])}
-          {@const ys = m.bbox.map((p) => p[1])}
-          {@const x0 = Math.min(...xs)}
-          {@const y0 = Math.min(...ys)}
-          {@const w = Math.max(...xs) - x0}
-          {@const h = Math.max(...ys) - y0}
-          <div class="absolute pointer-events-none flex items-center justify-center
-                      animate-[fadein_0.2s_ease-out]"
-               style="left:{x0*100}%;top:{y0*100}%;width:{w*100}%;height:{h*100}%;">
-            <div class="absolute inset-0 rounded-full border-2
-                        {m.status === 'loading' ? 'border-gold-400 animate-pulse'
-                          : m.status === 'done' ? 'border-pitch-400'
-                          : m.status === 'failed' ? 'border-flag-500 border-dashed'
-                          : 'border-sky26-400 border-dashed'}"
-                 style="box-shadow: 0 0 8px currentColor;"></div>
-            <span class="relative text-xs font-bold text-white drop-shadow-lg"
-                  style="text-shadow: 0 0 4px black;">
-              {m.status === 'loading' ? '…' : m.status === 'done' ? '✓' : m.status === 'failed' ? '✗' : '+'}
-            </span>
-          </div>
-        {/each}
+        <div class="lightbox-photo-wrap"
+             onpointerdown={onMarkPointerDown}
+             onpointermove={onMarkPointerMove}
+             onpointerup={onMarkPointerUp}
+             onpointercancel={onMarkPointerCancel}
+             style="touch-action: {lightboxScanMode ? 'none' : 'auto'};">
+          <ScanOverlay imageUrl={imageUrl} scanning={false}
+                       imgClass="lightbox-photo-img w-full h-auto {lightboxScanMode ? 'cursor-crosshair' : ''}"
+                       bboxes={[
+                         ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
+                         ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
+                       ]} />
+          <!-- Live drag preview while drawing -->
+          {#if dragState && lightboxScanMode}
+            {@const x0 = Math.min(dragState.startX, dragState.currentX)}
+            {@const y0 = Math.min(dragState.startY, dragState.currentY)}
+            {@const w = Math.abs(dragState.currentX - dragState.startX)}
+            {@const h = Math.abs(dragState.currentY - dragState.startY)}
+            <div class="absolute pointer-events-none drag-preview"
+                 style="left:{x0*100}%;top:{y0*100}%;width:{w*100}%;height:{h*100}%;">
+              <!-- Animated dashed border + crosshair at corners + label -->
+              <div class="absolute inset-0 drag-border"></div>
+              <span class="absolute -top-5 left-0 mono text-[10px] font-semibold text-sky26-400
+                           bg-[#050b1f]/90 px-1.5 py-0.5 rounded">
+                DEEP SCAN · {Math.round(w * 100)}×{Math.round(h * 100)}%
+              </span>
+            </div>
+          {/if}
+          <!-- Pending marks: rectangles drawn by the user, awaiting analysis. -->
+          {#each pendingMarks as m (m.id)}
+            {@const xs = m.bbox.map((p) => p[0])}
+            {@const ys = m.bbox.map((p) => p[1])}
+            {@const x0 = Math.min(...xs)}
+            {@const y0 = Math.min(...ys)}
+            {@const w = Math.max(...xs) - x0}
+            {@const h = Math.max(...ys) - y0}
+            <div class="absolute pointer-events-none deep-mark
+                        animate-[fadein_0.2s_ease-out] deep-{m.status}"
+                 style="left:{x0*100}%;top:{y0*100}%;width:{w*100}%;height:{h*100}%;">
+              <div class="deep-corner tl"></div>
+              <div class="deep-corner tr"></div>
+              <div class="deep-corner bl"></div>
+              <div class="deep-corner br"></div>
+              {#if m.status === 'loading'}
+                <div class="deep-scanline"></div>
+              {/if}
+              <span class="deep-badge mono text-[10px]"
+                    class:bg-sky26-400={m.status === 'pending'}
+                    class:bg-gold-400={m.status === 'loading'}
+                    class:bg-pitch-400={m.status === 'done'}
+                    class:bg-flag-500={m.status === 'failed'}>
+                {#if m.status === 'pending'}DEEP SCAN
+                {:else if m.status === 'loading'}ANALISANDO…
+                {:else if m.status === 'done'}OK
+                {:else}NÃO LIDO{/if}
+              </span>
+            </div>
+          {/each}
+        </div>
       </div>
     </div>
 
@@ -1101,24 +1186,97 @@
                     onclick={(e) => { e.stopPropagation(); lightboxScanMode = false; }}
                     class="rounded-full px-4 py-2 text-xs font-medium bg-sky26-500 text-white
                            border border-sky26-400 active:scale-95 transition">
-              toca onde a IA esqueceu — sair
+              sair do modo deep scan
             </button>
           {/if}
         </div>
         {#if pendingMarks.length === 0}
-          <p class="text-[11px] text-ink-300 text-center pointer-events-none">
-            toca em quantas regiões quiser, depois analisa todas de uma vez
+          <p class="text-[11px] text-ink-300 text-center pointer-events-none max-w-[28ch]">
+            arraste em volta do código pra abrir uma deep scan zone — pode fazer várias
           </p>
         {/if}
       {:else}
         <button type="button"
                 onclick={(e) => { e.stopPropagation(); lightboxScanMode = true; lightboxScanError = ''; }}
                 class="rounded-full px-4 py-2 text-xs font-medium border transition pointer-events-auto
-                       bg-white/15 text-white border-white/25"
+                       bg-white/15 text-white border-white/25 flex items-center gap-1.5"
                 style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
-          ✨ marcar regiões manualmente
+          <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3h6v2H5v4H3V3zm12 0h6v6h-2V5h-4V3zM3 15h2v4h4v2H3v-6zm16 0h2v6h-6v-2h4v-4z"/>
+            <circle cx="12" cy="12" r="2.5"/>
+          </svg>
+          deep scan manual
         </button>
       {/if}
     </div>
   </div>
 {/if}
+
+<style>
+  /* Drag-to-draw rectangle preview while user is dragging in scan mode. */
+  .drag-preview .drag-border {
+    position: absolute; inset: 0;
+    border: 2px dashed rgb(56 189 248);
+    border-radius: 4px;
+    background: rgba(56,189,248,0.10);
+    box-shadow: 0 0 12px rgba(56,189,248,0.6), inset 0 0 8px rgba(56,189,248,0.25);
+    animation: drag-pulse 1s ease-in-out infinite;
+  }
+  @keyframes drag-pulse {
+    0%,100% { opacity: 1; }
+    50%     { opacity: 0.7; }
+  }
+
+  /* Pending "deep scan zone" markers — futuristic neon brackets. */
+  .deep-mark {
+    --c: rgb(56 189 248);  /* sky-400 default for pending */
+  }
+  .deep-mark.deep-loading  { --c: rgb(251 191 36); }
+  .deep-mark.deep-done     { --c: rgb(34 197 94); }
+  .deep-mark.deep-failed   { --c: rgb(239 68 68); }
+
+  .deep-corner {
+    position: absolute; width: 14px; height: 14px;
+    border: 2.5px solid var(--c);
+    box-shadow: 0 0 8px var(--c);
+  }
+  .deep-corner.tl { top: -3px; left: -3px;  border-right: 0; border-bottom: 0; border-top-left-radius: 3px; }
+  .deep-corner.tr { top: -3px; right: -3px; border-left: 0;  border-bottom: 0; border-top-right-radius: 3px; }
+  .deep-corner.bl { bottom: -3px; left: -3px;  border-right: 0; border-top: 0; border-bottom-left-radius: 3px; }
+  .deep-corner.br { bottom: -3px; right: -3px; border-left: 0;  border-top: 0; border-bottom-right-radius: 3px; }
+
+  /* Loading-state internal scan line moving top→bottom. */
+  .deep-scanline {
+    position: absolute; left: 4%; right: 4%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--c), transparent);
+    filter: drop-shadow(0 0 4px var(--c));
+    animation: deep-scan-y 1.4s linear infinite;
+  }
+  @keyframes deep-scan-y {
+    0%   { top: 4%; opacity: 0.0; }
+    10%  { opacity: 1.0; }
+    90%  { opacity: 1.0; }
+    100% { top: 96%; opacity: 0.0; }
+  }
+
+  .deep-badge {
+    position: absolute; top: -16px; left: 0;
+    color: #050b1f;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+
+  .lightbox-photo-wrap {
+    position: relative;
+    line-height: 0;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+</style>
