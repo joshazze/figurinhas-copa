@@ -11,10 +11,18 @@
   } from '../stores/appState.svelte.js';
   import { mcStickerByCode, stickerByCode } from '../data/album.js';
 
-  const SCAN_VERSION = '3.0.0-backend';
+  // Bump em toda mudanca do fluxo Scan ou do backend OCR. Ver historico abaixo.
+  // 3.0.0  backend OCR (RapidOCR + fuzzy match)
+  // 3.1.0  multipass + CLAHE preprocessing + voting
+  // 3.1.1  fuzzy threshold 92 + min 3 chars (anti-falso-positivo)
+  // 3.2.0  resize 1800px + 9 passes (drop halves) + 15s tipico
+  // 3.3.0  early-exit em ~3-5s pra fotos boas (single-pass high-conf)
+  // 3.4.0  lightbox: toca na foto pra ampliar
+  const SCAN_VERSION = '3.4.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
+  let lightboxOpen = $state(false);
   let lastFile = $state(null);              // guarda o file pra reprocessar com Tesseract
   let ocrText = $state('');
   let ocrEngine = $state('');
@@ -318,7 +326,10 @@
     <div class="px-5 space-y-3">
       {#if imageUrl}
         <div class="card p-2">
-          <img src={imageUrl} alt="foto" class="rounded-xl max-h-40 mx-auto" />
+          <button type="button" onclick={() => (lightboxOpen = true)}
+                  class="block w-full appearance-none p-0 bg-transparent border-0 cursor-zoom-in">
+            <img src={imageUrl} alt="foto · toque pra ampliar" class="rounded-xl max-h-40 mx-auto" />
+          </button>
           <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400 text-center mt-2">
             {detected.length} código{detected.length === 1 ? '' : 's'} · {ocrEngine}
           </div>
@@ -511,6 +522,26 @@
         <p class="text-sm text-ink-300 mt-1">{errorMsg}</p>
         <button class="btn btn-primary mt-4 w-full" onclick={reset} type="button">tentar de novo</button>
       </div>
+    </div>
+  {/if}
+
+  <!-- LIGHTBOX da foto processada -->
+  {#if lightboxOpen && imageUrl}
+    <div role="dialog" aria-modal="true"
+         class="fixed inset-0 z-[70] flex items-center justify-center bg-black/95"
+         onclick={() => (lightboxOpen = false)}>
+      <img src={imageUrl} alt="foto ampliada"
+           class="max-h-[92vh] max-w-[96vw] object-contain select-none"
+           onclick={(e) => e.stopPropagation()} />
+      <button type="button" aria-label="fechar"
+              onclick={() => (lightboxOpen = false)}
+              class="fixed top-[max(0.75rem,var(--safe-top))] right-3 grid place-items-center
+                     h-10 w-10 rounded-full bg-white/10 text-white border border-white/20
+                     active:scale-95 transition"
+              style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
     </div>
   {/if}
 </section>
