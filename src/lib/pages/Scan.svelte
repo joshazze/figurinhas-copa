@@ -19,7 +19,8 @@
   // 3.3.0  early-exit em ~3-5s pra fotos boas (single-pass high-conf)
   // 3.4.0  lightbox: toca na foto pra ampliar
   // 3.5.0  early-reject: foto sem cromo aborta em ~2s em vez de 15-25s
-  const SCAN_VERSION = '3.5.0';
+  // 3.6.0  early-accept agressivo: 3+ good matches num pass -> exit. <8s mesmo com 50 cromos
+  const SCAN_VERSION = '3.6.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
