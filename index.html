@@ -32,16 +32,29 @@
         <div style="color:#fbbf24;font-size:48px;font-weight:700;letter-spacing:0.04em;line-height:1;">FIGS</div>
         <div style="color:#c1c9e3;font-size:11px;text-transform:uppercase;letter-spacing:0.3em;margin-top:6px;">cromos da copa 2026</div>
         <div id="boot-spinner" style="margin-top:32px;color:#9aa6cf;font-size:13px;">carregando o app...</div>
-        <div id="boot-stuck" style="display:none;margin-top:24px;max-width:300px;">
+        <div id="boot-stuck" style="display:none;margin-top:24px;max-width:320px;">
           <p style="color:#ef4444;font-size:13px;font-weight:600;">App não carregou.</p>
           <p style="color:#c1c9e3;font-size:12px;margin-top:8px;line-height:1.5;">
-            Provavelmente o cache antigo do navegador. Toca o botão pra limpar e recarregar.
+            Cache antigo travado. Toca o botão pra limpar — depois você vai precisar fechar o app/aba e abrir de novo.
           </p>
           <button id="boot-reset" type="button"
                   style="margin-top:16px;background:#fbbf24;color:#050b1f;border:0;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%;font-family:inherit;">
-            limpar cache e recarregar
+            limpar cache
           </button>
           <p id="boot-reset-status" style="margin-top:12px;color:#9aa6cf;font-size:11px;min-height:14px;"></p>
+          <div id="boot-reset-done" style="display:none;margin-top:16px;text-align:left;background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.4);border-radius:12px;padding:14px;">
+            <p style="color:#86efac;font-size:13px;font-weight:600;margin:0;">Cache limpo ✓</p>
+            <p style="color:#dde3f2;font-size:12px;margin-top:10px;line-height:1.5;">
+              Agora <strong>feche o app totalmente</strong>:
+            </p>
+            <ul style="color:#c1c9e3;font-size:12px;margin:8px 0 0;padding-left:18px;line-height:1.7;">
+              <li>iPhone: swipe-up pra abrir App Switcher → arrasta a janela pra cima pra fechar.</li>
+              <li>Depois abre o ícone do FIGS no home screen de novo.</li>
+            </ul>
+            <p style="color:#7886b8;font-size:11px;margin-top:12px;line-height:1.5;">
+              Se travar de novo nessa tela: <strong style="color:#dde3f2;">Configurações → Geral → Armazenamento do iPhone → Safari → Dados de Sites → joshazze.github.io → swipe pra apagar</strong>. Aí desinstala o FIGS do home screen e reinstala pelo Safari.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -61,28 +74,34 @@
         };
         var btn = document.getElementById('boot-reset');
         var status = document.getElementById('boot-reset-status');
+        var done = document.getElementById('boot-reset-done');
         if (btn) {
           btn.addEventListener('click', async function() {
             btn.disabled = true;
-            status.textContent = 'limpando...';
+            btn.textContent = 'limpando...';
+            var swCount = 0, cacheCount = 0, swErr = '', cacheErr = '';
             try {
               if ('serviceWorker' in navigator) {
                 var regs = await navigator.serviceWorker.getRegistrations();
-                for (var i = 0; i < regs.length; i++) { try { await regs[i].unregister(); } catch (e) {} }
+                for (var i = 0; i < regs.length; i++) {
+                  try { await regs[i].unregister(); swCount++; } catch (e) { swErr = String(e.message || e); }
+                }
               }
-            } catch (e) {}
+            } catch (e) { swErr = String(e.message || e); }
             try {
               if ('caches' in window) {
                 var keys = await caches.keys();
-                for (var i = 0; i < keys.length; i++) { try { await caches.delete(keys[i]); } catch (e) {} }
+                for (var i = 0; i < keys.length; i++) {
+                  try { await caches.delete(keys[i]); cacheCount++; } catch (e) { cacheErr = String(e.message || e); }
+                }
               }
-            } catch (e) {}
+            } catch (e) { cacheErr = String(e.message || e); }
             try { localStorage.clear(); } catch (e) {}
             try { sessionStorage.clear(); } catch (e) {}
-            status.textContent = 'pronto. recarregando...';
-            setTimeout(function() {
-              location.replace(location.pathname + '?reset=' + Date.now());
-            }, 800);
+            status.textContent = swCount + ' SW · ' + cacheCount + ' caches removidos'
+              + (swErr || cacheErr ? ' (erros: ' + swErr + ' ' + cacheErr + ')' : '');
+            btn.style.display = 'none';
+            done.style.display = 'block';
           });
         }
       })();
