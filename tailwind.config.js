@@ -11,6 +11,7 @@ export default {
       colors: {
         // Fundo navy profundo — referência ao azul da bandeira dos EUA
         ink: {
+          DEFAULT: '#dde3f2',
           950: '#050b1f',
           900: '#0a1330',
           800: '#101e44',
@@ -24,24 +25,28 @@ export default {
         },
         // Verde gramado / México
         pitch: {
+          DEFAULT: '#16a34a',
           400: '#22c55e',
           500: '#16a34a',
           600: '#0e8a3e'
         },
         // Vermelho seleção (USA / Canadá / México)
         flag: {
+          DEFAULT: '#dc2626',
           400: '#ef4444',
           500: '#dc2626',
           600: '#b91c1c'
         },
         // Azul bandeira USA
         sky26: {
+          DEFAULT: '#1d4ed8',
           400: '#3b82f6',
           500: '#1d4ed8',
           600: '#1e3a8a'
         },
         // Dourado da taça
         gold: {
+          DEFAULT: '#fbbf24',
           400: '#fbbf24',
           500: '#f59e0b',
           600: '#d97706'
