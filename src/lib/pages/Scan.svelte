@@ -3,7 +3,7 @@
   import { matchAll, compareStickers } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
   import { isNative } from '../utils/ocr.js';
-  import { scan as scanViaBackend, scanStream } from '../api/scan.js';
+  import { scan as scanViaBackend, scanStream, scanRegion } from '../api/scan.js';
   import { ApiError } from '../api/client.js';
   import {
     addSticker, addPack, fulfillExpect, fulfillGive,
@@ -27,7 +27,8 @@
   // 3.8.0  matrix reveal nos cards + noise filter de tentatives (FIFA WORLD CUP 2026 etc)
   // 3.9.0  bbox crop em cada card: IA cobre a regiao da foto onde leu o codigo
   // 3.10.0 scanner futurista navega foto + confirmadas com foto crop + tentatives circuladas na foto
-  const SCAN_VERSION = '3.10.0';
+  // 3.11.0 tap na tentative -> IA reanalisa a regiao com mais precisao (deep OCR focado)
+  const SCAN_VERSION = '3.11.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -135,7 +136,32 @@
       raw_text: d.raw_text,
       bbox: d.bbox || null,
       confidence: d.confidence,
+      loading: false,
+      failed: false,
     }];
+  }
+
+  function setTentativeFlag(id, patch) {
+    tentatives = tentatives.map((t) => t.id === id ? { ...t, ...patch } : t);
+  }
+
+  async function scrutinizeTentative(t) {
+    if (!lastFile || !t.bbox || t.loading) return;
+    setTentativeFlag(t.id, { loading: true, failed: false });
+    try {
+      const res = await scanRegion(lastFile, t.bbox);
+      if (res?.matched && res.detection) {
+        // Promote tentative → confirmed.
+        tentatives = tentatives.filter((x) => x.id !== t.id);
+        addConfirmedDetection(res.detection);
+      } else {
+        // Couldn't identify even on second pass; let the user type it.
+        manualInput = (t.raw_text || '').toUpperCase().replace(/[^A-Z0-9\- ]/g, '');
+        setTentativeFlag(t.id, { loading: false, failed: true });
+      }
+    } catch {
+      setTentativeFlag(t.id, { loading: false, failed: true });
+    }
   }
 
   async function runScan(file) {
@@ -425,18 +451,32 @@
             possíveis ({tentatives.length}) — circuladas na foto
           </div>
           <p class="text-[11px] text-ink-300">
-            Não consegui ler o código com certeza. Toca o texto pra usar como entrada manual.
+            Toca pra IA reanalisar a região com mais precisão. Se mesmo assim não identificar, o texto vai pro campo manual abaixo.
           </p>
           <div class="grid grid-cols-2 gap-2">
             {#each tentatives as t (t.id)}
               <button type="button"
-                      onclick={() => { manualInput = t.raw_text.toUpperCase().replace(/[^A-Z0-9\- ]/g, ''); }}
-                      class="rounded-lg border border-gold-400/30 bg-gold-400/5 p-2 text-left
-                             hover:bg-gold-400/10 transition flex items-center gap-2">
-                <BboxCrop imageUrl={imageUrl} bbox={t.bbox} size={48} scanning={false} />
+                      disabled={t.loading}
+                      onclick={() => scrutinizeTentative(t)}
+                      class="rounded-lg border p-2 text-left transition flex items-center gap-2 disabled:opacity-60
+                             {t.failed
+                               ? 'border-flag-500/40 bg-flag-500/5 hover:bg-flag-500/10'
+                               : 'border-gold-400/30 bg-gold-400/5 hover:bg-gold-400/10'}">
+                <BboxCrop imageUrl={imageUrl} bbox={t.bbox} size={48} scanning={t.loading} />
                 <div class="min-w-0 flex-1">
                   <div class="mono text-[11px] text-ink-200 truncate">"{t.raw_text}"</div>
-                  <div class="text-[9px] text-ink-400 mt-0.5">tap p/ usar</div>
+                  <div class="text-[9px] mt-0.5"
+                       class:text-gold-400={!t.loading && !t.failed}
+                       class:text-flag-400={t.failed}
+                       class:text-ink-300={t.loading}>
+                    {#if t.loading}
+                      analisando de novo…
+                    {:else if t.failed}
+                      não identifiquei · usa o campo manual
+                    {:else}
+                      tap p/ reanalisar com IA
+                    {/if}
+                  </div>
                 </div>
               </button>
             {/each}

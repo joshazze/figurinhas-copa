@@ -35,6 +35,16 @@ export async function scan(file) {
   return request('/scan', { method: 'POST', auth: true, body: { image } });
 }
 
+/** Re-scrutinize a single region of the image. The bbox is normalised 0..1.
+ *  Slower but more accurate than the streaming scan — used when the user
+ *  taps a tentative to ask the AI to look again. */
+export async function scanRegion(file, bbox) {
+  const image = await compressToBase64(file);
+  return request('/scan/region', {
+    method: 'POST', auth: true, body: { image, bbox },
+  });
+}
+
 import { API_BASE } from './client.js';
 import { auth } from '../stores/authState.svelte.js';
 
