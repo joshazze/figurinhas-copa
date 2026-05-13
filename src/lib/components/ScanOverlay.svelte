@@ -2,7 +2,9 @@
   import { onMount, onDestroy } from 'svelte';
 
   // bboxes: [{bbox: [[x,y]...] in 0-1, status: 'verde'|'amarelo'|'tentative'}]
-  let { imageUrl, scanning = true, bboxes = [] } = $props();
+  // imgClass: extra Tailwind classes for the underlying <img> (e.g.
+  // "max-h-[92vh] w-auto" in the lightbox so the photo fits the viewport).
+  let { imageUrl, scanning = true, bboxes = [], imgClass = '' } = $props();
 
   // "Roaming reticle" — a crosshair that hops around the image every 600ms
   // while the scan is active. Pure JS state; no canvas.
@@ -48,7 +50,7 @@
 </script>
 
 <div class="scan-overlay-root relative inline-block">
-  <img src={imageUrl} alt="" class="block w-full h-auto rounded-xl" />
+  <img src={imageUrl} alt="" class="block w-full h-auto rounded-xl {imgClass}" />
 
   {#if scanning}
     <!-- Subtle grid pattern over the entire frame -->
