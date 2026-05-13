@@ -51,6 +51,9 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+        // recover.html precisa ser servida AS-IS (sem o navigation fallback do
+        // SPA, que retornaria index.html). Senao a saida de emergencia some.
+        navigateFallbackDenylist: [/\/recover\.html$/],
         // JS PRECISA estar no precache — sem ele o SW serve index.html antigo
         // apontando pra chunks que nao existem mais no servidor.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
