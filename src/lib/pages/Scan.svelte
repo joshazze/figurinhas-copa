@@ -37,7 +37,9 @@
   // 3.15.2 recall: 9 tiles 3x3 (era 4 quadrants) + batch reanalisar tentatives + feedback
   // 3.15.3 learning: correcoes alimentam alias cache (rapido pra fragments ja vistos)
   //                  + false_positives viram blacklist · botoes editar/excluir lado a lado
-  const SCAN_VERSION = '3.15.3';
+  // 3.16.0 seal detector: balao verde como pre-detector. OCR so nos balões = sem dupes
+  //                       + latencia 5-10x menor + precisao maior
+  const SCAN_VERSION = '3.16.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
