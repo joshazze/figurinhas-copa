@@ -18,7 +18,8 @@
   // 3.2.0  resize 1800px + 9 passes (drop halves) + 15s tipico
   // 3.3.0  early-exit em ~3-5s pra fotos boas (single-pass high-conf)
   // 3.4.0  lightbox: toca na foto pra ampliar
-  const SCAN_VERSION = '3.4.0';
+  // 3.5.0  early-reject: foto sem cromo aborta em ~2s em vez de 15-25s
+  const SCAN_VERSION = '3.5.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
