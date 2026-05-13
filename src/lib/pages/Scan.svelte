@@ -41,7 +41,9 @@
   //                       + latencia 5-10x menor + precisao maior
   // 3.16.1 brackets HUD maiores (18px) + cantos arredondados + glow inset
   // 3.16.2 card-detector backend + UI mostra bboxes 'candidate' (cinza) durante scan
-  const SCAN_VERSION = '3.16.2';
+  // 3.16.3 removido card-detector como gatekeeper (falha em white bg / cascade);
+  //        dedup agora por IoU bbox OR centroid distance — funciona em qualquer cenario
+  const SCAN_VERSION = '3.16.3';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
