@@ -28,7 +28,8 @@
   // 3.9.0  bbox crop em cada card: IA cobre a regiao da foto onde leu o codigo
   // 3.10.0 scanner futurista navega foto + confirmadas com foto crop + tentatives circuladas na foto
   // 3.11.0 tap na tentative -> IA reanalisa a regiao com mais precisao (deep OCR focado)
-  const SCAN_VERSION = '3.11.0';
+  // 3.11.1 lightbox stacking fix (saiu de dentro da <section>, fundo 100% opaco)
+  const SCAN_VERSION = '3.11.1';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -667,23 +668,26 @@
     </div>
   {/if}
 
-  <!-- LIGHTBOX da foto processada -->
-  {#if lightboxOpen && imageUrl}
-    <div role="dialog" aria-modal="true"
-         class="fixed inset-0 z-[70] flex items-center justify-center bg-black/95"
-         onclick={() => (lightboxOpen = false)}>
-      <img src={imageUrl} alt="foto ampliada"
-           class="max-h-[92vh] max-w-[96vw] object-contain select-none"
-           onclick={(e) => e.stopPropagation()} />
-      <button type="button" aria-label="fechar"
-              onclick={() => (lightboxOpen = false)}
-              class="fixed top-[max(0.75rem,var(--safe-top))] right-3 grid place-items-center
-                     h-10 w-10 rounded-full bg-white/10 text-white border border-white/20
-                     active:scale-95 transition"
-              style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
-        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-  {/if}
 </section>
+
+<!-- LIGHTBOX da foto processada — TOP-LEVEL (fora da <section> com screen-enter
+     transform; fixed inside a transformed ancestor anchors to that ancestor
+     instead of the viewport, which is what was causing the half-screen bug). -->
+{#if lightboxOpen && imageUrl}
+  <div role="dialog" aria-modal="true"
+       class="fixed inset-0 z-[70] flex items-center justify-center bg-black"
+       onclick={() => (lightboxOpen = false)}>
+    <img src={imageUrl} alt="foto ampliada"
+         class="max-h-[92vh] max-w-[96vw] object-contain select-none"
+         onclick={(e) => e.stopPropagation()} />
+    <button type="button" aria-label="fechar"
+            onclick={() => (lightboxOpen = false)}
+            class="fixed top-[max(0.75rem,var(--safe-top))] right-3 grid place-items-center
+                   h-10 w-10 rounded-full bg-white/15 text-white border border-white/25
+                   active:scale-95 transition"
+            style="backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+      <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+{/if}
