@@ -3,7 +3,7 @@
   import { matchAll, compareStickers } from '../utils/codeMatch.js';
   import { formatStickerLabel } from '../utils/format.js';
   import { isNative } from '../utils/ocr.js';
-  import { scan as scanViaBackend } from '../api/scan.js';
+  import { scan as scanViaBackend, scanStream } from '../api/scan.js';
   import { ApiError } from '../api/client.js';
   import {
     addSticker, addPack, fulfillExpect, fulfillGive,
@@ -20,7 +20,8 @@
   // 3.4.0  lightbox: toca na foto pra ampliar
   // 3.5.0  early-reject: foto sem cromo aborta em ~2s em vez de 15-25s
   // 3.6.0  early-accept agressivo: 3+ good matches num pass -> exit. <8s mesmo com 50 cromos
-  const SCAN_VERSION = '3.6.0';
+  // 3.7.0  streaming NDJSON: figurinhas aparecem na tela uma a uma + tentatives + bbox crop
+  const SCAN_VERSION = '3.7.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -31,11 +32,13 @@
   let ocrDebug = $state(null);
   let phase = $state('prepare');            // prepare | engine | models | ready | ocr
   let phasePercent = $state(null);          // null = indeterminado; numero = %
+  let phaseLabel = $state('');              // human-readable label streamed from backend
   let errorMsg = $state('');
 
-  // detected: [{ id, sticker (album resolvido), votes, confirmed, variant }]
-  // variant: 'album' | 'mc' — so faz sentido pra stickers de numero 13
+  // detected: [{ id, sticker, votes, confirmed, variant, bbox, confidence }]
   let detected = $state([]);
+  // tentatives: [{ id, raw_text, bbox, confidence }]
+  let tentatives = $state([]);
   let manualInput = $state('');
 
   // Destination
@@ -54,8 +57,10 @@
     ocrDebug = null;
     phase = 'prepare';
     phasePercent = null;
+    phaseLabel = '';
     errorMsg = '';
     detected = [];
+    tentatives = [];
     manualInput = '';
     destination = null;
     person = '';
@@ -91,45 +96,74 @@
     network: 'Sem conexão. Verifique sua internet.',
   };
 
+  let _seq = 0; // monotonic counter for stable card ids during streaming
+
+  function addConfirmedDetection(d) {
+    const sticker = stickerByCode[d.code] || mcStickerByCode[d.code];
+    if (!sticker) return;
+    const variant = d.code.startsWith('MC-') ? 'mc' : 'album';
+    const copies = Math.max(1, d.copies || 1);
+    const next = [...detected];
+    for (let k = 0; k < copies; k++) {
+      next.push({
+        id: `d${++_seq}`,
+        sticker, variant,
+        votes: d.status === 'verde' ? 6 : 2,
+        confirmed: d.status === 'verde',
+        confidence: d.confidence,
+        bbox: d.bbox || null,
+        status: d.status,
+      });
+    }
+    // sort live so cards keep stable order (verde first, then by code)
+    next.sort((a, b) => {
+      if (a.confirmed !== b.confirmed) return a.confirmed ? -1 : 1;
+      return compareStickers(a.sticker, b.sticker);
+    });
+    detected = next;
+  }
+
+  function addTentative(d) {
+    tentatives = [...tentatives, {
+      id: `t${++_seq}`,
+      raw_text: d.raw_text,
+      bbox: d.bbox || null,
+      confidence: d.confidence,
+    }];
+  }
+
   async function runScan(file) {
     stage = 'processing';
     phase = 'upload';
-    phasePercent = null;
+    phasePercent = 0;
+    phaseLabel = 'Enviando foto...';
     errorMsg = '';
     ocrDebug = null;
+    detected = [];
+    tentatives = [];
     try {
       phase = 'ocr';
-      const res = await scanViaBackend(file);
-      ocrEngine = 'backend';
-      ocrText = res.detections.map((d) => d.raw_text).join(' ');
-      ocrDebug = { detections: res.detections.length };
-
-      // Expand copies (same code seen N times → N entries).
-      const expanded = [];
-      for (const d of res.detections) {
-        const sticker = stickerByCode[d.code] || mcStickerByCode[d.code];
-        if (!sticker) continue;
-        const variant = d.code.startsWith('MC-') ? 'mc' : 'album';
-        const copies = Math.max(1, d.copies || 1);
-        for (let k = 0; k < copies; k++) {
-          expanded.push({ sticker, variant, status: d.status, confidence: d.confidence });
+      const final = await scanStream(file, (event) => {
+        if (event.type === 'progress') {
+          phasePercent = event.pct;
+          phaseLabel = event.label;
+        } else if (event.type === 'detection' && event.code) {
+          addConfirmedDetection(event);
+        } else if (event.type === 'tentative') {
+          addTentative(event);
+        } else if (event.type === 'done') {
+          ocrDebug = {
+            confirmed: event.confirmed,
+            tentative: event.tentative,
+            elapsed_ms: event.elapsed_ms,
+          };
         }
-      }
-      expanded.sort((a, b) => compareStickers(a.sticker, b.sticker));
-
-      detected = expanded.map((m, i) => ({
-        id: `m${i}`,
-        sticker: m.sticker,
-        // map backend status → legacy "votes" scale (used by status pill).
-        votes: m.status === 'verde' ? 6 : 2,
-        confirmed: m.status === 'verde',
-        variant: m.variant,
-        confidence: m.confidence,
-      }));
+      });
+      ocrEngine = `backend ${final?.elapsed_ms ? `(${(final.elapsed_ms/1000).toFixed(1)}s)` : ''}`;
       stage = 'review';
     } catch (err) {
       if (import.meta.env.DEV) console.error('Scan error:', err);
-      const key = err instanceof ApiError ? err.code : 'network';
+      const key = err.code || (err instanceof ApiError ? err.code : 'network');
       errorMsg = BACKEND_ERROR_MESSAGES[key] || (err.message || 'falha no scan');
       stage = 'error';
     }
@@ -220,12 +254,14 @@
   const peopleSuggestions = $derived(() => knownPeople());
   const has13Stickers = $derived(() => detected.some((d) => hasMCVariant(d.sticker)));
 
-  const phaseLabel = $derived(() => {
-    if (phase === 'upload') return 'Comprimindo foto…';
-    if (phase === 'ocr')    return 'Lendo a foto no servidor…';
-    return 'Processando…';
+  // phaseLabel is now a streamed $state value (set by the backend NDJSON
+  // 'progress' events). No derived fallback needed.
+  const phaseSub = $derived(() => {
+    if (detected.length === 0 && tentatives.length === 0) return null;
+    const c = detected.length;
+    const t = tentatives.length;
+    return `${c} ${c === 1 ? 'figurinha' : 'figurinhas'}${t > 0 ? ` · ${t} possíve${t === 1 ? 'l' : 'is'}` : ''} até agora`;
   });
-  const phaseSub = $derived(() => null);
 
   const matchingExpect = $derived(() => {
     if (destination !== 'received') return 0;
@@ -298,29 +334,49 @@
 
   <!-- PROCESSING -->
   {:else if stage === 'processing'}
-    <div class="px-5">
-      <div class="card p-5 text-center">
+    <div class="px-5 space-y-3">
+      <!-- Quando a primeira figurinha sai, a foto encolhe pra dar espaço aos cards -->
+      <div class="card p-3 transition-all duration-500"
+           class:p-5={detected.length === 0}>
         {#if imageUrl}
-          <img src={imageUrl} alt="foto" class="rounded-2xl max-h-64 mx-auto" />
+          <img src={imageUrl} alt="foto"
+               class="rounded-xl mx-auto transition-all duration-500"
+               style="max-height: {detected.length === 0 ? '14rem' : '6rem'};" />
         {/if}
-        <h2 class="display text-xl font-bold text-white mt-4">{phaseLabel()}</h2>
-        {#if phaseSub()}
-          <p class="text-xs text-ink-300 mt-1">{phaseSub()}</p>
-        {/if}
-        {#if phasePercent != null}
-          <!-- Progresso real (durante OCR) -->
-          <div class="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div class="h-full bg-gold-400 transition-all" style="width: {phasePercent}%"></div>
-          </div>
-          <div class="text-[10px] text-ink-400 mt-1">{phasePercent}%</div>
-        {:else}
-          <!-- Indeterminado (durante load) -->
-          <div class="mt-4 h-1.5 rounded-full bg-white/10 overflow-hidden relative">
-            <div class="absolute inset-y-0 w-1/3 bg-gold-400 rounded-full animate-pulse-slide"></div>
-          </div>
-          <div class="text-[10px] text-ink-400 mt-2 mono">{phase}</div>
-        {/if}
+        <div class="mt-3 text-center">
+          <h2 class="display text-base font-bold text-white truncate">{phaseLabel || 'Processando…'}</h2>
+          {#if phaseSub()}
+            <p class="text-[11px] text-ink-300 mt-0.5">{phaseSub()}</p>
+          {/if}
+        </div>
+        <div class="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+          <div class="h-full bg-gold-400 transition-all duration-300"
+               style="width: {phasePercent ?? 0}%"></div>
+        </div>
+        <div class="flex justify-between text-[10px] text-ink-400 mt-1">
+          <span class="mono">{phase}</span>
+          <span class="num">{phasePercent ?? 0}%</span>
+        </div>
       </div>
+
+      <!-- Cards aparecem ao vivo. Transição entre processing e review é a
+           mesma view — só muda interatividade quando done. -->
+      {#if detected.length > 0}
+        <div class="card p-3">
+          <div class="text-[10px] uppercase tracking-[0.18em] text-ink-300 mb-2">
+            achadas até agora
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            {#each detected as d (d.id)}
+              <div class="rounded-lg border border-pitch-500/30 bg-pitch-500/10 p-2 text-center
+                          animate-[fadein_0.3s_ease-out]">
+                <div class="mono text-xs font-bold text-pitch-400">{d.sticker.code}</div>
+                <div class="text-[9px] text-ink-300 truncate">{d.sticker.team || d.sticker.section || ''}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
     </div>
 
   <!-- REVIEW -->
@@ -341,6 +397,28 @@
               <pre class="mono mt-1 whitespace-pre-wrap break-all">{JSON.stringify(ocrDebug, null, 2)}</pre>
             </details>
           {/if}
+        </div>
+      {/if}
+
+      {#if tentatives.length > 0}
+        <div class="card p-3 space-y-2 border border-gold-400/30">
+          <div class="text-[10px] uppercase tracking-[0.18em] text-gold-400">
+            possíveis figurinhas ({tentatives.length})
+          </div>
+          <p class="text-[11px] text-ink-300">
+            Achei texto aqui mas não consegui identificar o código com certeza. Toca pra digitar o código manualmente.
+          </p>
+          <div class="grid grid-cols-2 gap-2">
+            {#each tentatives as t (t.id)}
+              <button type="button"
+                      onclick={() => { manualInput = t.raw_text.toUpperCase().replace(/[^A-Z0-9\- ]/g, ''); }}
+                      class="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-left
+                             hover:bg-white/[0.07] transition animate-[fadein_0.3s_ease-out]">
+                <div class="mono text-xs text-ink-200 truncate">"{t.raw_text}"</div>
+                <div class="text-[9px] text-ink-400 mt-0.5">tap p/ usar como código</div>
+              </button>
+            {/each}
+          </div>
         </div>
       {/if}
 

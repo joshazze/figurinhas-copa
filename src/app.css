@@ -226,3 +226,9 @@
 
 /* Progress ring fill animation */
 .ring-fill { transition: stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1); }
+
+/* Fade-in usado pra cards aparecerem 1 a 1 no streaming do Scan */
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
