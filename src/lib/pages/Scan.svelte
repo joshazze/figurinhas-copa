@@ -10,6 +10,9 @@
     appState, knownPeople, defaultStickersForSource, PACK_SOURCES
   } from '../stores/appState.svelte.js';
   import { mcStickerByCode, stickerByCode } from '../data/album.js';
+  import MatrixReveal from '../components/MatrixReveal.svelte';
+  import BboxCrop from '../components/BboxCrop.svelte';
+  import ScanOverlay from '../components/ScanOverlay.svelte';
 
   // Bump em toda mudanca do fluxo Scan ou do backend OCR. Ver historico abaixo.
   // 3.0.0  backend OCR (RapidOCR + fuzzy match)
@@ -21,7 +24,10 @@
   // 3.5.0  early-reject: foto sem cromo aborta em ~2s em vez de 15-25s
   // 3.6.0  early-accept agressivo: 3+ good matches num pass -> exit. <8s mesmo com 50 cromos
   // 3.7.0  streaming NDJSON: figurinhas aparecem na tela uma a uma + tentatives + bbox crop
-  const SCAN_VERSION = '3.7.0';
+  // 3.8.0  matrix reveal nos cards + noise filter de tentatives (FIFA WORLD CUP 2026 etc)
+  // 3.9.0  bbox crop em cada card: IA cobre a regiao da foto onde leu o codigo
+  // 3.10.0 scanner futurista navega foto + confirmadas com foto crop + tentatives circuladas na foto
+  const SCAN_VERSION = '3.10.0';
 
   let stage = $state('idle');               // idle | processing | review | destination | done | error
   let imageUrl = $state(null);
@@ -335,43 +341,50 @@
   <!-- PROCESSING -->
   {:else if stage === 'processing'}
     <div class="px-5 space-y-3">
-      <!-- Quando a primeira figurinha sai, a foto encolhe pra dar espaço aos cards -->
-      <div class="card p-3 transition-all duration-500"
-           class:p-5={detected.length === 0}>
+      <!-- Foto original com overlay scanner futurista. Tentatives ficam
+           CIRCULADAS aqui; confirmadas viram cards embaixo (multa-style). -->
+      <div class="card p-2">
         {#if imageUrl}
-          <img src={imageUrl} alt="foto"
-               class="rounded-xl mx-auto transition-all duration-500"
-               style="max-height: {detected.length === 0 ? '14rem' : '6rem'};" />
+          <ScanOverlay imageUrl={imageUrl} scanning={true}
+                       bboxes={[
+                         ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
+                         ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
+                       ]} />
         {/if}
-        <div class="mt-3 text-center">
-          <h2 class="display text-base font-bold text-white truncate">{phaseLabel || 'Processando…'}</h2>
+        <div class="mt-3 px-1">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="display text-sm font-bold text-white truncate">{phaseLabel || 'Processando…'}</h2>
+            <span class="num text-[11px] text-gold-400">{phasePercent ?? 0}%</span>
+          </div>
+          <div class="mt-1.5 h-1 rounded-full bg-white/10 overflow-hidden">
+            <div class="h-full bg-gold-400 transition-all duration-300"
+                 style="width: {phasePercent ?? 0}%"></div>
+          </div>
           {#if phaseSub()}
-            <p class="text-[11px] text-ink-300 mt-0.5">{phaseSub()}</p>
+            <p class="text-[10px] text-ink-400 mt-1">{phaseSub()}</p>
           {/if}
-        </div>
-        <div class="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
-          <div class="h-full bg-gold-400 transition-all duration-300"
-               style="width: {phasePercent ?? 0}%"></div>
-        </div>
-        <div class="flex justify-between text-[10px] text-ink-400 mt-1">
-          <span class="mono">{phase}</span>
-          <span class="num">{phasePercent ?? 0}%</span>
         </div>
       </div>
 
-      <!-- Cards aparecem ao vivo. Transição entre processing e review é a
-           mesma view — só muda interatividade quando done. -->
+      <!-- Confirmadas (multa de trânsito): crop + matrix reveal + código.
+           Cards aparecem 1 a 1 conforme o stream confirma. -->
       {#if detected.length > 0}
         <div class="card p-3">
-          <div class="text-[10px] uppercase tracking-[0.18em] text-ink-300 mb-2">
-            achadas até agora
+          <div class="text-[10px] uppercase tracking-[0.18em] text-pitch-400 mb-2">
+            identificadas ({detected.length})
           </div>
           <div class="grid grid-cols-3 gap-2">
             {#each detected as d (d.id)}
-              <div class="rounded-lg border border-pitch-500/30 bg-pitch-500/10 p-2 text-center
-                          animate-[fadein_0.3s_ease-out]">
-                <div class="mono text-xs font-bold text-pitch-400">{d.sticker.code}</div>
-                <div class="text-[9px] text-ink-300 truncate">{d.sticker.team || d.sticker.section || ''}</div>
+              <div class="rounded-lg border border-pitch-500/40 bg-pitch-500/10 p-2
+                          flex flex-col items-center gap-1.5
+                          animate-[fadein_0.3s_ease-out] overflow-hidden">
+                <BboxCrop imageUrl={imageUrl} bbox={d.bbox} size={56} scanning={false} />
+                <div class="text-xs leading-none">
+                  <MatrixReveal text={d.sticker.code} duration={550} />
+                </div>
+                <div class="text-[9px] text-ink-300 truncate w-full text-center">
+                  {d.sticker.team || d.sticker.section || ''}
+                </div>
               </div>
             {/each}
           </div>
@@ -386,10 +399,16 @@
         <div class="card p-2">
           <button type="button" onclick={() => (lightboxOpen = true)}
                   class="block w-full appearance-none p-0 bg-transparent border-0 cursor-zoom-in">
-            <img src={imageUrl} alt="foto · toque pra ampliar" class="rounded-xl max-h-40 mx-auto" />
+            <ScanOverlay imageUrl={imageUrl} scanning={false}
+                         bboxes={[
+                           ...detected.map((d) => ({ id: d.id, bbox: d.bbox, status: d.status })),
+                           ...tentatives.map((t) => ({ id: t.id, bbox: t.bbox, status: 'tentative' })),
+                         ]} />
           </button>
           <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400 text-center mt-2">
-            {detected.length} código{detected.length === 1 ? '' : 's'} · {ocrEngine}
+            {detected.length} código{detected.length === 1 ? '' : 's'}
+            {#if tentatives.length > 0} · {tentatives.length} possíve{tentatives.length === 1 ? 'l' : 'is'}{/if}
+            · {ocrEngine}
           </div>
           {#if ocrDebug}
             <details class="mt-2 text-[10px] text-ink-400">
@@ -403,19 +422,22 @@
       {#if tentatives.length > 0}
         <div class="card p-3 space-y-2 border border-gold-400/30">
           <div class="text-[10px] uppercase tracking-[0.18em] text-gold-400">
-            possíveis figurinhas ({tentatives.length})
+            possíveis ({tentatives.length}) — circuladas na foto
           </div>
           <p class="text-[11px] text-ink-300">
-            Achei texto aqui mas não consegui identificar o código com certeza. Toca pra digitar o código manualmente.
+            Não consegui ler o código com certeza. Toca o texto pra usar como entrada manual.
           </p>
           <div class="grid grid-cols-2 gap-2">
             {#each tentatives as t (t.id)}
               <button type="button"
                       onclick={() => { manualInput = t.raw_text.toUpperCase().replace(/[^A-Z0-9\- ]/g, ''); }}
-                      class="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-left
-                             hover:bg-white/[0.07] transition animate-[fadein_0.3s_ease-out]">
-                <div class="mono text-xs text-ink-200 truncate">"{t.raw_text}"</div>
-                <div class="text-[9px] text-ink-400 mt-0.5">tap p/ usar como código</div>
+                      class="rounded-lg border border-gold-400/30 bg-gold-400/5 p-2 text-left
+                             hover:bg-gold-400/10 transition flex items-center gap-2">
+                <BboxCrop imageUrl={imageUrl} bbox={t.bbox} size={48} scanning={false} />
+                <div class="min-w-0 flex-1">
+                  <div class="mono text-[11px] text-ink-200 truncate">"{t.raw_text}"</div>
+                  <div class="text-[9px] text-ink-400 mt-0.5">tap p/ usar</div>
+                </div>
               </button>
             {/each}
           </div>
