@@ -10,7 +10,7 @@
   import Packs from './lib/pages/Packs.svelte';
   import Logs from './lib/pages/Logs.svelte';
   import Settings from './lib/pages/Settings.svelte';
-  import { pullOnBoot, setupAutoSync, syncStatus } from './lib/api/sync.js';
+  import { pullOnBoot, setupAutoSync, syncStatus } from './lib/api/sync.svelte.js';
   import { hasScan, isAuthenticated } from './lib/stores/authState.svelte.js';
 
   let tab = $state(readHash());
