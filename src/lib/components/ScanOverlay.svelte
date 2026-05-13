@@ -146,14 +146,14 @@
   .reticle::after  { top: 50%; left: -6px; right: -6px; height: 1px; transform: translateY(-50%); }
   .bbox-mark { position: absolute; }
   .bbox-corner {
-    position: absolute; width: 10px; height: 10px;
-    border: 2px solid var(--c);
-    box-shadow: 0 0 6px var(--c);
+    position: absolute; width: 18px; height: 18px;
+    border: 3px solid var(--c);
+    box-shadow: 0 0 10px var(--c), inset 0 0 4px var(--c);
   }
-  .bbox-corner.tl { top: -1px; left: -1px;  border-right: 0; border-bottom: 0; }
-  .bbox-corner.tr { top: -1px; right: -1px; border-left: 0;  border-bottom: 0; }
-  .bbox-corner.bl { bottom: -1px; left: -1px;  border-right: 0; border-top: 0; }
-  .bbox-corner.br { bottom: -1px; right: -1px; border-left: 0;  border-top: 0; }
+  .bbox-corner.tl { top: -2px; left: -2px;  border-right: 0; border-bottom: 0; border-top-left-radius: 4px; }
+  .bbox-corner.tr { top: -2px; right: -2px; border-left: 0;  border-bottom: 0; border-top-right-radius: 4px; }
+  .bbox-corner.bl { bottom: -2px; left: -2px;  border-right: 0; border-top: 0; border-bottom-left-radius: 4px; }
+  .bbox-corner.br { bottom: -2px; right: -2px; border-left: 0;  border-top: 0; border-bottom-right-radius: 4px; }
 
   /* Tentative: a pulsing amber circle stamped over the unread region. */
   .tentative-mark { display: grid; place-items: center; }
