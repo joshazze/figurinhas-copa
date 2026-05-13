@@ -141,7 +141,10 @@
         </h2>
         <a href="#album" class="text-[11px] text-ink-300 underline shrink-0">ver álbum</a>
       </div>
-      <div class="scrollx flex gap-2 overflow-x-auto px-5 pb-2 -mr-0">
+      <div class="scrollx flex gap-2 overflow-x-auto pb-2"
+           style="scroll-padding-inline:1.25rem;">
+        <!-- Left spacer matches px-5 of the heading; ensures first card aligns. -->
+        <div class="shrink-0 w-5" aria-hidden="true"></div>
         {#each closingSoon() as t (t.team)}
           <a href={`#album`}
              class="shrink-0 w-[120px] rounded-2xl bg-white/[0.04] border border-white/10
@@ -164,6 +167,8 @@
             <div class="text-[9px] text-ink-400 mt-1 mono">{t.pct.toFixed(0)}% colado</div>
           </a>
         {/each}
+        <!-- Right spacer so the last card doesn't kiss the viewport edge when scrolled. -->
+        <div class="shrink-0 w-5" aria-hidden="true"></div>
       </div>
     </div>
   {/if}
